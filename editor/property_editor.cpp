@@ -1956,7 +1956,6 @@ CustomPropertyEditor::CustomPropertyEditor() {
 		Vector<Variant> binds;
 		binds.push_back(i);
 		action_buttons[i]->connect("pressed", this, "_action_pressed", binds);
-		action_buttons[i]->set_flat(true);
 	}
 
 	color_picker = NULL;
