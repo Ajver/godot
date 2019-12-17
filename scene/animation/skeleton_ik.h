@@ -141,8 +141,107 @@ public:
 	static void solve(Task *p_task, real_t blending_delta, bool override_tip_basis, bool p_use_magnet, const Vector3 &p_magnet_position);
 };
 
-class SkeletonIK : public Node {
-	GDCLASS(SkeletonIK, Node);
+class SkeletonIKBase : public Node {
+	GDCLASS(SkeletonIKBase, Node);
+
+protected:
+	virtual void
+	_validate_property(PropertyInfo &property) const {}
+
+	static void _bind_methods() {
+		ClassDB::bind_method(D_METHOD("set_root_bone", "root_bone"), &SkeletonIKBase::set_root_bone);
+		ClassDB::bind_method(D_METHOD("get_root_bone"), &SkeletonIKBase::get_root_bone);
+
+		ClassDB::bind_method(D_METHOD("set_tip_bone", "tip_bone"), &SkeletonIKBase::set_tip_bone);
+		ClassDB::bind_method(D_METHOD("get_tip_bone"), &SkeletonIKBase::get_tip_bone);
+
+		ClassDB::bind_method(D_METHOD("set_interpolation", "interpolation"), &SkeletonIKBase::set_interpolation);
+		ClassDB::bind_method(D_METHOD("get_interpolation"), &SkeletonIKBase::get_interpolation);
+
+		ClassDB::bind_method(D_METHOD("set_target_transform", "target"), &SkeletonIKBase::set_target_transform);
+		ClassDB::bind_method(D_METHOD("get_target_transform"), &SkeletonIKBase::get_target_transform);
+
+		ClassDB::bind_method(D_METHOD("set_target_node", "node"), &SkeletonIKBase::set_target_node);
+		ClassDB::bind_method(D_METHOD("get_target_node"), &SkeletonIKBase::get_target_node);
+
+		ClassDB::bind_method(D_METHOD("set_override_tip_basis", "override"), &SkeletonIKBase::set_override_tip_basis);
+		ClassDB::bind_method(D_METHOD("is_override_tip_basis"), &SkeletonIKBase::is_override_tip_basis);
+
+		ClassDB::bind_method(D_METHOD("set_use_magnet", "use"), &SkeletonIKBase::set_use_magnet);
+		ClassDB::bind_method(D_METHOD("is_using_magnet"), &SkeletonIKBase::is_using_magnet);
+
+		ClassDB::bind_method(D_METHOD("set_magnet_position", "local_position"), &SkeletonIKBase::set_magnet_position);
+		ClassDB::bind_method(D_METHOD("get_magnet_position"), &SkeletonIKBase::get_magnet_position);
+
+		ClassDB::bind_method(D_METHOD("get_parent_skeleton"), &SkeletonIKBase::get_parent_skeleton);
+		ClassDB::bind_method(D_METHOD("is_running"), &SkeletonIKBase::is_running);
+
+		ClassDB::bind_method(D_METHOD("set_min_distance", "min_distance"), &SkeletonIKBase::set_min_distance);
+		ClassDB::bind_method(D_METHOD("get_min_distance"), &SkeletonIKBase::get_min_distance);
+
+		ClassDB::bind_method(D_METHOD("set_max_iterations", "iterations"), &SkeletonIKBase::set_max_iterations);
+		ClassDB::bind_method(D_METHOD("get_max_iterations"), &SkeletonIKBase::get_max_iterations);
+
+		ClassDB::bind_method(D_METHOD("start", "one_time"), &SkeletonIKBase::start, DEFVAL(false));
+		ClassDB::bind_method(D_METHOD("stop"), &SkeletonIKBase::stop);
+
+		ADD_PROPERTY(PropertyInfo(Variant::STRING, "root_bone"), "set_root_bone", "get_root_bone");
+		ADD_PROPERTY(PropertyInfo(Variant::STRING, "tip_bone"), "set_tip_bone", "get_tip_bone");
+		ADD_PROPERTY(PropertyInfo(Variant::REAL, "interpolation", PROPERTY_HINT_RANGE, "0,1,0.001"), "set_interpolation", "get_interpolation");
+		ADD_PROPERTY(PropertyInfo(Variant::TRANSFORM, "target"), "set_target_transform", "get_target_transform");
+		ADD_PROPERTY(PropertyInfo(Variant::BOOL, "override_tip_basis"), "set_override_tip_basis", "is_override_tip_basis");
+		ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_magnet"), "set_use_magnet", "is_using_magnet");
+		ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "magnet"), "set_magnet_position", "get_magnet_position");
+		ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "target_node"), "set_target_node", "get_target_node");
+		ADD_PROPERTY(PropertyInfo(Variant::REAL, "min_distance"), "set_min_distance", "get_min_distance");
+		ADD_PROPERTY(PropertyInfo(Variant::INT, "max_iterations"), "set_max_iterations", "get_max_iterations");
+	}
+	virtual void _notification(int p_what) {}
+
+public:
+	SkeletonIKBase() {}
+	virtual ~SkeletonIKBase() {}
+
+	virtual void set_root_bone(const StringName &p_root_bone) = 0;
+	virtual StringName get_root_bone() const = 0;
+
+	virtual void set_tip_bone(const StringName &p_tip_bone) = 0;
+	virtual StringName get_tip_bone() const = 0;
+
+	virtual void set_interpolation(real_t p_interpolation) = 0;
+	virtual real_t get_interpolation() const = 0;
+
+	virtual void set_target_transform(const Transform &p_target) = 0;
+	virtual const Transform &get_target_transform() const = 0;
+
+	virtual void set_target_node(const NodePath &p_node) = 0;
+	virtual NodePath get_target_node() = 0;
+
+	virtual void set_override_tip_basis(bool p_override) = 0;
+	virtual bool is_override_tip_basis() const = 0;
+
+	virtual void set_use_magnet(bool p_use) = 0;
+	virtual bool is_using_magnet() const = 0;
+
+	virtual void set_magnet_position(const Vector3 &p_local_position) = 0;
+	virtual const Vector3 &get_magnet_position() const = 0;
+
+	virtual void set_min_distance(real_t p_min_distance) = 0;
+	virtual real_t get_min_distance() const = 0;
+
+	virtual void set_max_iterations(int p_iterations) = 0;
+	virtual int get_max_iterations() const = 0;
+
+	virtual Skeleton *get_parent_skeleton() const = 0;
+
+	virtual bool is_running() = 0;
+
+	virtual void start(bool p_one_time = false) = 0;
+	virtual void stop() = 0;
+};
+
+class SkeletonIK : public SkeletonIKBase {
+	GDCLASS(SkeletonIK, SkeletonIKBase);
 
 	StringName root_bone;
 	StringName tip_bone;

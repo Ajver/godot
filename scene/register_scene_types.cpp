@@ -443,7 +443,8 @@ void register_scene_types() {
 
 	ClassDB::register_class<PhysicalBone>();
 	ClassDB::register_class<SoftBody>();
-
+	
+    ClassDB::register_virtual_class<SkeletonIKBase>();
 	ClassDB::register_class<SkeletonIK>();
 	ClassDB::register_class<BoneAttachment>();
 
