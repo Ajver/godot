@@ -397,8 +397,9 @@ private:
 		Vector<Ref<Material> > &material_cache;
 		Map<String, Ref<Image> > texture_atlas;
 	};
-
+	Ref<Image> dilate(Ref<Image> source_image);
 public:
+
 	Node *merge(Node *p_root, Node *p_original_root);
 
 	void _generate_texture_atlas(MergeState& state, String texture_type);

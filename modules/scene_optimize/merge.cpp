@@ -383,6 +383,7 @@ Ref<Image> MeshMergeMaterialRepack::_get_source_texture(MergeState &state, Map<u
 		}
 	}
 	img->unlock();
+	img = dilate(img); 
 	image_cache.insert(chart.material, img);
 	return img;
 }
@@ -537,6 +538,72 @@ void MeshMergeMaterialRepack::scale_uvs_by_texture_dimension(const Vector<MeshIn
 		}
 	}
 }
+Ref<Image> MeshMergeMaterialRepack::dilate(Ref<Image> source_image) {
+
+	Ref<Image> target_image = source_image->duplicate();
+	int32_t max_dimension = MAX(target_image->get_width(), target_image->get_height());
+	for (int32_t i = 0; i < max_dimension; i++) {
+		source_image->lock();
+		target_image->lock();
+		bool touched = false;
+		for (int32_t y = 0; y < source_image->get_size().y; y++) {
+			for (int32_t x = 0; x < source_image->get_size().x; x++) {
+				if (target_image->get_pixel(x, y).a != 0.0f) {
+					continue;
+				}
+				int32_t num = 0;
+				Color color_accum;
+				if (x - 1 >= 0 && x + 1 < source_image->get_size().x) {
+					if (source_image->get_pixel(x - 1, y).a != 0.0f) {
+						color_accum += source_image->get_pixel(x - 1, y);
+						num++;
+					}
+					if (source_image->get_pixel(x + 1, y).a != 0.0f) {
+						color_accum += source_image->get_pixel(x + 1, y);
+						num++;
+					}
+					if (num > 0) {
+						target_image->set_pixel(x, y, color_accum / num);
+						touched = true;
+					}
+				}
+			}
+		}
+		for (int32_t y = 0; y < source_image->get_size().y; y++) {
+			for (int32_t x = 0; x < source_image->get_size().x; x++) {
+				if (target_image->get_pixel(x, y).a != 0.0f) {
+					continue;
+				}
+				int32_t num = 0;
+				Color color_accum;
+				if (y - 1 >= 0 && y + 1 < source_image->get_size().y) {
+					if (source_image->get_pixel(x, y - 1).a != 0.0f) {
+						color_accum += source_image->get_pixel(x, y - 1);
+						num++;
+					}
+					if (source_image->get_pixel(x, y + 1).a != 0.0f) {
+						color_accum += source_image->get_pixel(x, y + 1);
+						num++;
+					}
+					if (num > 0) {
+						target_image->set_pixel(x, y, color_accum / num);
+						touched = true;
+					}
+				}
+			}
+		}
+		source_image->unlock();
+		target_image->unlock();
+		source_image = target_image->duplicate();
+		if (touched == false) {
+			break;
+		}
+		print_line("Image dilation iteration " + itos(i));
+	}
+	target_image->generate_mipmaps();
+	return target_image;
+}
+
 
 void MeshMergeMaterialRepack::map_vertex_to_material(const Vector<MeshInstance *> mesh_items, Array &vertex_to_material, Vector<Ref<Material> > &material_cache) {
 	for (int32_t i = 0; i < mesh_items.size(); i++) {
