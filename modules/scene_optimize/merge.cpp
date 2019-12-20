@@ -383,7 +383,6 @@ Ref<Image> MeshMergeMaterialRepack::_get_source_texture(MergeState &state, Map<u
 		}
 	}
 	img->unlock();
-	img = dilate(img); 
 	image_cache.insert(chart.material, img);
 	return img;
 }
@@ -671,7 +670,8 @@ Node *MeshMergeMaterialRepack::_output(MergeState &state) {
 		if (A && !A->get()->empty()) {
 			Ref<ImageTexture> texture;
 			texture.instance();
-			texture->create_from_image(A->get());
+			Ref<Image> img = dilate(A->get());
+			texture->create_from_image(img);
 			texture->set_storage(ImageTexture::Storage::STORAGE_COMPRESS_LOSSY);
 			texture->set_lossy_storage_quality(0.75);
 			mat->set_cull_mode(SpatialMaterial::CULL_DISABLED);
@@ -681,7 +681,8 @@ Node *MeshMergeMaterialRepack::_output(MergeState &state) {
 		if (E && !E->get()->empty()) {
 			Ref<ImageTexture> texture;
 			texture.instance();
-			texture->create_from_image(E->get());
+			Ref<Image> img = dilate(E->get());
+			texture->create_from_image(img);
 			texture->set_storage(ImageTexture::Storage::STORAGE_COMPRESS_LOSSY);
 			texture->set_lossy_storage_quality(0.75);
 			mat->set_feature(SpatialMaterial::FEATURE_EMISSION, true);
@@ -703,7 +704,8 @@ Node *MeshMergeMaterialRepack::_output(MergeState &state) {
 			if (has_normals) {
 				Ref<ImageTexture> texture;
 				texture.instance();
-				texture->create_from_image(N->get());
+				Ref<Image> img = dilate(N->get());
+				texture->create_from_image(img);
 				texture->set_storage(ImageTexture::Storage::STORAGE_COMPRESS_LOSSY);
 				texture->set_lossy_storage_quality(0.75);
 				mat->set_feature(SpatialMaterial::FEATURE_NORMAL_MAPPING, true);
@@ -714,7 +716,8 @@ Node *MeshMergeMaterialRepack::_output(MergeState &state) {
 		if (ORM && !ORM->get()->empty()) {
 			Ref<ImageTexture> texture;
 			texture.instance();
-			texture->create_from_image(ORM->get());
+			Ref<Image> img = dilate(ORM->get());
+			texture->create_from_image(img);
 			texture->set_storage(ImageTexture::Storage::STORAGE_COMPRESS_LOSSY);
 			texture->set_lossy_storage_quality(0.75);
 			mat->set_ao_texture_channel(SpatialMaterial::TEXTURE_CHANNEL_RED);
