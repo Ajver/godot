@@ -119,11 +119,11 @@ void IKConstraintKusudama::optimize_limiting_axes() {
 
 	Vector<Vector3> directions;
 	if (limit_cones.size() == 1) {
-		directions.push_back(directions.write[0] + limit_cones.write[0]->get_control_point());
+		directions.push_back(directions.write[0] + limit_cones.write[0]->get_control_point().normalized());
 	} else {
 		for (int cone_i = 0; cone_i < limit_cones.size() - 1; cone_i++) {
-			Vector3 this_c = limit_cones.write[cone_i]->get_control_point();
-			Vector3 next_c = limit_cones.write[cone_i + 1]->get_control_point();
+			Vector3 this_c = limit_cones.write[cone_i]->get_control_point().normalized();
+			Vector3 next_c = limit_cones.write[cone_i + 1]->get_control_point().normalized();
 			Quat this_to_next = Quat(this_c, next_c);
 			Vector3 axis;
 			real_t angle;
@@ -159,8 +159,8 @@ void IKConstraintKusudama::optimize_limiting_axes() {
 	//
 	//    for (int32_t limit_cone_i =0 ;limit_cone_i<limit_cones.size(); limit_cone_i++) {
 	//        IKLimitCone lc = limit_cones[limit_cone_i];
-	//        original_limiting_axes.setToGlobalOf(lc.get_control_point(), lc.get_control_point());
-	//        limiting_axes.setToLocalOf(lc.get_control_point(), lc.get_control_point());
+	//        original_limiting_axes.setToGlobalOf(lc.get_control_point(), lc.get_control_point().normalized());
+	//        limiting_axes.setToLocalOf(lc.get_control_point(), lc.get_control_point().normalized());
 	//        lc.get_control_point().normalize();
 	//    }
 	update_tangent_radii();
@@ -914,8 +914,8 @@ void IKLimitCone::update_tangent_handles(Ref<IKLimitCone> p_next) {
 	real_t radA = get_radius();
 	real_t radB = p_next->get_radius();
 
-	Vector3 A = get_control_point();
-	Vector3 B = get_control_point();
+	Vector3 A = get_control_point().normalized();
+	Vector3 B = get_control_point().normalized();
 
 	Vector3 arcNormal = A.cross(B);
 	Quat aToARadian = Quat(A, arcNormal);
@@ -1108,7 +1108,7 @@ void IKLimitCone::compute_triangles(Ref<IKLimitCone> p_next) {
 }
 
 void IKLimitCone::set_control_point(Vector3 p_control_point) {
-	control_point = p_control_point.normalized();
+	control_point = p_control_point;
 	if (parent_kusudama.is_valid()) {
 		//	parent_kusudama->constraint_update_notification();
 	}
@@ -2039,13 +2039,9 @@ bool IKConstraintKusudama::_set(const StringName &p_name, const Variant &p_value
 		String what = name.get_slicec('/', 2);
 		if (what == "control_point") {
 			limit_cones.write[index]->set_control_point(p_value);
-			_change_notify();
-			emit_changed();
 			return true;
 		} else if (what == "radius") {
 			limit_cones.write[index]->set_radius(p_value);
-			_change_notify();
-			emit_changed();
 			return true;
 		}
 	}
