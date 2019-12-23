@@ -151,8 +151,8 @@ public:
 
 class IKAxes : public Transform {
 
-	const int LEFT = -1;
-	const int RIGHT = 1;
+	static const int LEFT = -1;
+	static const int RIGHT = 1;
 
 	int chirality = RIGHT;
 
@@ -540,8 +540,9 @@ public:
 		BoneId effector_bone;
 		Transform goal_transform;
 	};
-
+    struct Chain;
 	struct ChainItem {
+        Chain *parent_armature;
 
 		Vector<ChainItem> children;
 		ChainItem *parent_item;
@@ -551,8 +552,8 @@ public:
 		PhysicalBone *pb;
 		bool springy;
 		real_t cos_half_dampen = 0.0f;
-		PoolRealArray cos_half_returnfullness_dampened;
-		PoolRealArray half_returnfullness_dampened;
+		PoolRealArray cos_half_returnful_dampened;
+		PoolRealArray half_returnful_dampened;
 		bool ik_orientation_lock = false;
 		real_t stiffness_scalar = 0.0f;
 
@@ -580,7 +581,8 @@ public:
 		void update_cos_dampening();
 		void set_axes_to_returned(IKAxes p_global, IKAxes p_to_set, IKAxes p_limiting_axes, real_t p_cos_half_angle_dampen, real_t p_angle_dampen);
 		void set_axes_to_be_snapped(IKAxes p_to_set, IKAxes p_limiting_axes, real_t p_cos_half_angle_dampen);
-	};
+        void populate_return_dampening_iteration_array(Ref<IKConstraintKusudama> k);
+    };
 	struct ChainTarget {
         ChainItem *chain_item;
         const EndEffector *end_effector;

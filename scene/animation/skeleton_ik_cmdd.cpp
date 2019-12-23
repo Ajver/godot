@@ -76,17 +76,17 @@ CMDDInverseKinematic::ChainItem *CMDDInverseKinematic::ChainItem::add_child(cons
 }
 
 void CMDDInverseKinematic::ChainItem::update_cos_dampening() {
-    real_t predamp = 1.0f - get_stiffness();
-    // real_t defaultDampening = dampening;
-    // real_t dampening = forBone.getParent() == NULL ? MathUtils.PI : predamp * defaultDampening;
-    // cos_half_dampen = Math::cos(dampening / 2.0f);
-    // AbstractKusudama k = ((AbstractKusudama)forBone.getConstraint());
-    // if (k != null && k.getPainfullness() != 0f) {
-    // 	springy = true;
-    // 	populateReturnDampeningIterationArray(k);
-    // } else {
-    // 	springy = false;
-    // }
+    real_t predampening = 1.0f - get_stiffness();
+    real_t default_dampening = parent_armature->dampening;
+    real_t dampening = parent_item == NULL ? Math_PI : predampening * default_dampening;
+    cos_half_dampen = Math::cos(dampening / 2.0f);
+    Ref<IKConstraintKusudama> k = constraint;
+    if (k.is_valid() && k->get_pain() != 0.0f) {
+        springy = true;
+        populate_return_dampening_iteration_array(k);
+    } else {
+        springy = false;
+    }
 }
 
 real_t CMDDInverseKinematic::ChainItem::get_stiffness() const {
@@ -96,7 +96,8 @@ real_t CMDDInverseKinematic::ChainItem::get_stiffness() const {
 void CMDDInverseKinematic::ChainItem::set_axes_to_returned(IKAxes p_global, IKAxes p_to_set, IKAxes p_limiting_axes,
                                                            real_t p_cos_half_angle_dampen, real_t p_angle_dampen) {
     if (constraint.is_valid()) {
-        constraint->set_axes_to_returnfulled(p_global, p_to_set, p_limiting_axes, p_cos_half_angle_dampen, p_angle_dampen);
+        constraint->set_axes_to_returnfulled(p_global, p_to_set, p_limiting_axes, p_cos_half_angle_dampen,
+                                             p_angle_dampen);
     }
 }
 
@@ -360,7 +361,8 @@ void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(CMDDInv
                                                                          real_t p_total_iterations) {
 
     p_qcp_orientation_aligner.set_max_iterations(10);
-    IKQuat qcp_rot = p_qcp_orientation_aligner.weighted_superpose(p_localized_tip_headings, p_localized_target_headings, p_weights, p_is_translate);
+    IKQuat qcp_rot = p_qcp_orientation_aligner.weighted_superpose(p_localized_tip_headings, p_localized_target_headings,
+                                                                  p_weights, p_is_translate);
 
     Vector3 translate_by = p_qcp_orientation_aligner.get_translation();
     real_t bone_damp = p_chain_item->cos_half_dampen;
@@ -419,7 +421,8 @@ void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(CMDDInv
     float new_rmsd = 999999.0f;
 
     if (p_stabilization_passes > 0) {
-        best_rmsd = get_manual_msd(r_chain.localized_effector_headings, r_chain.localized_target_headings, r_chain.weights);
+        best_rmsd = get_manual_msd(r_chain.localized_effector_headings, r_chain.localized_target_headings,
+                                   r_chain.weights);
     }
 
     for (int stabilization_i = 0; stabilization_i < p_stabilization_passes + 1; stabilization_i++) {
@@ -435,7 +438,8 @@ void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(CMDDInv
 
         if (p_stabilization_passes > 0) {
             update_effector_headings(r_chain, r_chain.localized_effector_headings, bone_xform);
-            new_rmsd = get_manual_msd(r_chain.localized_effector_headings, r_chain.localized_target_headings, r_chain.weights);
+            new_rmsd = get_manual_msd(r_chain.localized_effector_headings, r_chain.localized_target_headings,
+                                      r_chain.weights);
 
             if (best_rmsd >= new_rmsd) {
                 if (p_for_bone->springy) {
@@ -443,7 +447,9 @@ void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(CMDDInv
                         real_t returnfullness = p_for_bone->constraint->get_pain();
                         real_t dampened_angle = p_for_bone->get_stiffness() * p_dampening * returnfullness;
                         real_t total_iterations_sq = p_total_iterations * p_total_iterations;
-                        real_t scaled_dampened_angle = dampened_angle * ((total_iterations_sq - (p_iteration * p_iteration)) / total_iterations_sq);
+                        real_t scaled_dampened_angle = dampened_angle *
+                                                       ((total_iterations_sq - (p_iteration * p_iteration)) /
+                                                        total_iterations_sq);
                         real_t cos_half_angle = Math::cos(0.5f * scaled_dampened_angle);
                         p_for_bone->set_axes_to_returned(p_for_bone->initial_transform, bone_xform,
                                                          p_for_bone->constraint->get_limiting_axes(), cos_half_angle,
@@ -451,11 +457,12 @@ void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(CMDDInv
                     } else {
                         p_for_bone->set_axes_to_returned(p_for_bone->initial_transform, bone_xform,
                                                          p_for_bone->constraint->get_limiting_axes(),
-                                                         p_for_bone->cos_half_returnfullness_dampened[p_iteration],
-                                                         p_for_bone->half_returnfullness_dampened[p_iteration]);
+                                                         p_for_bone->cos_half_returnful_dampened[p_iteration],
+                                                         p_for_bone->half_returnful_dampened[p_iteration]);
                     }
                     update_effector_headings(r_chain, r_chain.localized_effector_headings, bone_xform);
-                    new_rmsd = get_manual_msd(r_chain.localized_effector_headings, r_chain.localized_target_headings, r_chain.weights);
+                    new_rmsd = get_manual_msd(r_chain.localized_effector_headings, r_chain.localized_target_headings,
+                                              r_chain.weights);
                 }
                 best_orientation = bone_xform.basis.get_rotation_quat();
                 best_rmsd = new_rmsd;
@@ -1240,7 +1247,8 @@ int QCP::calc_rmsd(real_t p_len) {
     real_t Sxx2Syy2Szz2Syz2Szy2 = Syy2 + Szz2 - Sxx2 + Syz2 + Szy2;
 
     real_t c2 = -2.0f * (Sxx2 + Syy2 + Szz2 + Sxy2 + Syx2 + Sxz2 + Szx2 + Syz2 + Szy2);
-    real_t c1 = 8.0f * (Sxx * Syz * Szy + Syy * Szx * Sxz + Szz * Sxy * Syx - Sxx * Syy * Szz - Syz * Szx * Sxy - Szy * Syx * Sxz);
+    real_t c1 = 8.0f * (Sxx * Syz * Szy + Syy * Szx * Sxz + Szz * Sxy * Syx - Sxx * Syy * Szz - Syz * Szx * Sxy -
+                        Szy * Syx * Sxz);
 
     SxzpSzx = Sxz + Szx;
     SyzpSzy = Syz + Szy;
@@ -1253,7 +1261,16 @@ int QCP::calc_rmsd(real_t p_len) {
 
     real_t Sxy2Sxz2Syx2Szx2 = Sxy2 + Sxz2 - Syx2 - Szx2;
 
-    real_t c0 = Sxy2Sxz2Syx2Szx2 * Sxy2Sxz2Syx2Szx2 + (Sxx2Syy2Szz2Syz2Szy2 + SyzSzymSyySzz2) * (Sxx2Syy2Szz2Syz2Szy2 - SyzSzymSyySzz2) + (-(SxzpSzx) * (SyzmSzy) + (SxymSyx) * (SxxmSyy - Szz)) * (-(SxzmSzx) * (SyzpSzy) + (SxymSyx) * (SxxmSyy + Szz)) + (-(SxzpSzx) * (SyzpSzy) - (SxypSyx) * (SxxpSyy - Szz)) * (-(SxzmSzx) * (SyzmSzy) - (SxypSyx) * (SxxpSyy + Szz)) + (+(SxypSyx) * (SyzpSzy) + (SxzpSzx) * (SxxmSyy + Szz)) * (-(SxymSyx) * (SyzmSzy) + (SxzpSzx) * (SxxpSyy + Szz)) + (+(SxypSyx) * (SyzmSzy) + (SxzmSzx) * (SxxmSyy - Szz)) * (-(SxymSyx) * (SyzpSzy) + (SxzmSzx) * (SxxpSyy - Szz));
+    real_t c0 = Sxy2Sxz2Syx2Szx2 * Sxy2Sxz2Syx2Szx2 +
+                (Sxx2Syy2Szz2Syz2Szy2 + SyzSzymSyySzz2) * (Sxx2Syy2Szz2Syz2Szy2 - SyzSzymSyySzz2) +
+                (-(SxzpSzx) * (SyzmSzy) + (SxymSyx) * (SxxmSyy - Szz)) *
+                (-(SxzmSzx) * (SyzpSzy) + (SxymSyx) * (SxxmSyy + Szz)) +
+                (-(SxzpSzx) * (SyzpSzy) - (SxypSyx) * (SxxpSyy - Szz)) *
+                (-(SxzmSzx) * (SyzmSzy) - (SxypSyx) * (SxxpSyy + Szz)) +
+                (+(SxypSyx) * (SyzpSzy) + (SxzpSzx) * (SxxmSyy + Szz)) *
+                (-(SxymSyx) * (SyzmSzy) + (SxzpSzx) * (SxxpSyy + Szz)) +
+                (+(SxypSyx) * (SyzmSzy) + (SxzmSzx) * (SxxmSyy - Szz)) *
+                (-(SxymSyx) * (SyzpSzy) + (SxzmSzx) * (SxxpSyy - Szz));
 
     mxEigenV = e0;
 
@@ -1537,7 +1554,8 @@ void IKConstraintKusudama::set_axes_to_snapped(IKAxes p_to_set, IKAxes p_limitin
     }
 }
 
-void IKConstraintKusudama::set_axes_to_orientation_snap(IKAxes p_to_set, IKAxes p_limiting_axes, float p_cos_half_angle_dampen) {
+void IKConstraintKusudama::set_axes_to_orientation_snap(IKAxes p_to_set, IKAxes p_limiting_axes,
+                                                        float p_cos_half_angle_dampen) {
     Vector<real_t> inBounds;
     inBounds.push_back(1.f);
     bone_ray.position = Vector3(p_to_set.origin);
@@ -1591,7 +1609,8 @@ real_t IKConstraintKusudama::angle_to_twist_center(IKAxes p_global_xform, IKAxes
     return dist_to_mid;
 }
 
-Vector3 IKConstraintKusudama::point_on_path_sequence(IKAxes p_global_xform, Vector3 p_in_point, IKAxes p_limiting_axes) {
+Vector3
+IKConstraintKusudama::point_on_path_sequence(IKAxes p_global_xform, Vector3 p_in_point, IKAxes p_limiting_axes) {
     real_t closestPointDot = 0.0f;
     Vector3 point = p_limiting_axes.origin;
     point.normalize();
@@ -1898,4 +1917,24 @@ bool CMDDInverseKinematic::ChainTarget::is_ancestor_of(CMDDInverseKinematic::Cha
 
 real_t CMDDInverseKinematic::ChainTarget::get_pin_weight() {
     return pin_weight;
+}
+
+void CMDDInverseKinematic::ChainItem::populate_return_dampening_iteration_array(Ref<IKConstraintKusudama> k) {
+    float predampen = 1.0f - get_stiffness();
+    float default_dampening = parent_armature->dampening;
+    float dampening = parent_item == NULL ? Math_PI : predampen * default_dampening;
+    float iterations = parent_armature->get_default_iterations();
+    float returnful = k->get_pain();
+    float falloff = 0.2f;
+    half_returnful_dampened.resize(iterations);
+    cos_half_returnful_dampened.resize(iterations);
+    float iterations_pow = Math::pow(iterations, falloff * iterations * returnful);
+    for (int32_t iter_i = 0; iter_i < iterations; iter_i++) {
+        float iteration_scalar =
+                ((iterations_pow) - Math::pow(iter_i, falloff * iterations * returnful)) / (iterations_pow);
+        float iteration_return_clamp = iteration_scalar * returnful * dampening;
+        float cos_iteration_return_clamp = Math::cos(iteration_return_clamp / 2.0f);
+        half_returnful_dampened.write()[iter_i] = iteration_return_clamp;
+        cos_half_returnful_dampened.write()[iter_i] = cos_iteration_return_clamp;
+    }
 }
