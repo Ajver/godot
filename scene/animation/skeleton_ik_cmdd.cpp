@@ -115,6 +115,76 @@ void CMDDInverseKinematic::ChainItem::set_stiffness(real_t p_stiffness) {
     }
 }
 
+void IKConstraintKusudama::optimizeLimitingAxes() {
+    IKAxes originalLimitingAxes = limiting_axes;
+//
+//        ArrayList < Vec3f< ?>> directions = new ArrayList<>();
+//        if (getLimitCones().size() == 1) {
+//            directions.add((limitCones.get(0).getControlPoint()).copy());
+//        } else {
+//            for (int i = 0; i < getLimitCones().size() - 1; i++) {
+//                Vec3f< ?> thisC = getLimitCones().get(i).getControlPoint().copy();
+//                Vec3f< ?> nextC = getLimitCones().get(i + 1).getControlPoint().copy();
+//                Rot thisToNext = new Rot(thisC, nextC);
+//                Rot halfThisToNext = new Rot(thisToNext.getAxis(), thisToNext.getAngle() / 2f);
+//
+//                Vec3f< ?> halfAngle = halfThisToNext.applyToCopy(thisC);
+//                halfAngle.normalize();
+//                halfAngle.mult(thisToNext.getAngle());
+//                directions.add(halfAngle);
+//            }
+//        }
+//
+//        Vec3f< ?> newY = new SGVec_3f();
+//        for (Vec3f< ?> dv:
+//        directions) {
+//            newY.add(dv);
+//        }
+//
+//        newY.div(directions.size());
+//        if (newY.mag() != 0 && !Float.isNaN(newY.y)) {
+//            newY.normalize();
+//        } else {
+//            newY = new SGVec_3f(0, 1f, 0);
+//        }
+//
+//        sgRayf newYRay = new sgRayf(new SGVec_3f(0, 0, 0), newY);
+//
+//        Rot oldYtoNewY = new Rot(limitingAxes.y_().heading(), originalLimitingAxes.getGlobalOf(newYRay).heading());
+//        limitingAxes.rotateBy(oldYtoNewY);
+//
+//        for (AbstractLimitCone lc : getLimitCones()) {
+//            originalLimitingAxes.setToGlobalOf(lc.controlPoint, lc.controlPoint);
+//            limitingAxes.setToLocalOf(lc.controlPoint, lc.controlPoint);
+//            lc.controlPoint.normalize();
+//        }
+//
+//        updateTangentRadii();
+}
+
+void IKConstraintKusudama::set_axial_limits(float p_min_angle, float p_in_range) {
+    minAxialAngle = p_min_angle;
+    range = to_tau(p_in_range);
+    constraint_update_notification();
+}
+
+void IKConstraintKusudama::add_limit_cone_at_index(int p_insert_at, Vector3 p_new_point, float p_radius) {
+    IKLimitCone newCone = create_limit_cone_for_index(p_insert_at, p_new_point, p_radius);
+    if (p_insert_at == -1) {
+        limit_cones.push_back(newCone);
+    } else {
+        limit_cones.insert(p_insert_at, newCone);
+    }
+    update_tangent_radii();
+    update_rotational_freedom();
+}
+
+IKLimitCone IKConstraintKusudama::create_limit_cone_for_index(int p_insert_at, Vector3 p_new_point, float p_radius) {
+    ERR_FAIL_INDEX_V(p_insert_at, limit_cones.size(), IKLimitCone());
+    return limit_cones.write[p_insert_at] = IKLimitCone(p_new_point, p_radius, this);
+}
+
+
 /// Build a chain that starts from the root to tip
 bool CMDDInverseKinematic::build_chain(Task *p_task, bool p_force_simple_chain) {
     ERR_FAIL_COND_V(-1 == p_task->root_bone, false);
