@@ -115,7 +115,8 @@ public:
 
 class IKConstraintKusudama;
 
-class IKLimitCone : public Object {
+class IKLimitCone : public Resource {
+    GDCLASS(IKLimitCone, Resource);
     /**
      * a triangle where the [1] is th tangentCircleNext_n, and [0] and [2]
      * are the points at which the tangent circle intersects this limitCone and the
@@ -137,23 +138,25 @@ class IKLimitCone : public Object {
     real_t tangent_circle_radius_previous = 0.0f;
     real_t tangent_circle_radius_previous_cos = 0.0f;
 
-    void compute_triangles(IKLimitCone p_next);
+    void compute_triangles(Ref<IKLimitCone> p_next);
+protected:
+    static void _bind_methods();
 
 public:
     Vector3 control_point;
     Vector3 radial_point;
 
-    Vector3 get_on_path_sequence(IKLimitCone p_next, Vector3 p_input) const;
+    Vector3 get_on_path_sequence(Ref<IKLimitCone> p_next, Vector3 p_input) const;
 
-    Vector3 closest_cone(IKLimitCone p_next, Vector3 p_input) const;
+    Vector3 closest_cone(Ref<IKLimitCone> p_next, Vector3 p_input) const;
 
-    Vector3 get_closest_path_point(IKLimitCone p_next, Vector3 p_input) const;
+    Vector3 get_closest_path_point(Ref<IKLimitCone> p_next, Vector3 p_input) const;
 
     real_t get_radius() const;
 
     real_t get_radius_cosine();
 
-    Vector3 get_control_point();
+    Vector3 get_control_point() const;
 
     Vector3 get_orthogonal(Vector3 p_vec);
 
@@ -161,9 +164,9 @@ public:
 
     void set_control_point(Vector3 p_control_point);
 
-    void update_tangent_handles(IKLimitCone p_next);
+    void update_tangent_handles(Ref<IKLimitCone> p_next);
 
-    IKLimitCone(Vector3 p_location, real_t p_rad, Ref<IKConstraintKusudama> p_attached_to);
+    void initialize(Vector3 p_location, real_t p_rad, Ref<IKConstraintKusudama> p_attached_to);
 
     void set_radius(real_t p_radius);
 };
@@ -861,7 +864,7 @@ private:
      * with the expectation that any limitCone in the array is connected to the cone at the previous element in the array,
      * and the cone at the next element in the array.
      */
-    Vector<IKLimitCone> limit_cones;
+    Vector<Ref<IKLimitCone>> limit_cones;
     /**
      * Defined as some Angle in radians about the limitingAxes Y axis, 0 being equivalent to the
      * limitingAxes Z axis.
@@ -900,6 +903,9 @@ protected:
      * a bone cannot be in as defined by its representation as a point on the surface of a hypersphere.
      */
     virtual void update_rotational_freedom();
+    void _get_property_list(List<PropertyInfo> *p_list) const;
+    bool _get(const StringName &p_name, Variant &r_ret) const;
+    bool _set(const StringName &p_name, const Variant &p_value);
 
 public:
     IKConstraintKusudama() {
@@ -953,8 +959,8 @@ public:
 
     virtual real_t angle_to_twist_center(IKAxes p_global_xform, IKAxes p_to_set, IKAxes p_limiting_axes);
 
-    virtual void set_axes_to_returnfulled(IKAxes p_global_xform, IKAxes p_to_set, IKAxes p_limiting_axes,
-                                          real_t p_cos_half_angle_dampen, real_t p_angle_dampen);
+    virtual void set_axes_to_returnful(IKAxes p_global_xform, IKAxes p_to_set, IKAxes p_limiting_axes,
+                                       real_t p_cos_half_angle_dampen, real_t p_angle_dampen);
 
     /**
      *
@@ -989,7 +995,7 @@ public:
 
     virtual void update_tangent_radii();
 
-    virtual IKLimitCone create_limit_cone_for_index(int p_insert_at, Vector3 p_new_point, float p_radius);
+    virtual Ref<IKLimitCone> create_limit_cone_for_index(int p_insert_at, Vector3 p_new_point, float p_radius);
 
     /**
      * Adds a LimitCone to the Kusudama. LimitCones are reach cones which can be arranged sequentially. The Kusudama will infer
