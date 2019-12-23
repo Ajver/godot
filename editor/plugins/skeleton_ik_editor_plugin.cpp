@@ -69,7 +69,7 @@ void SkeletonIKEditorPlugin::edit(Object *p_object) {
 		}
 	}
 
-	SkeletonIKBase *s = Object::cast_to<SkeletonIKBase>(p_object);
+	SkeletonIKObject *s = Object::cast_to<SkeletonIKObject>(p_object);
 	if (!s)
 		return;
 
