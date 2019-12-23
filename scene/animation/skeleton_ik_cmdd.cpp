@@ -115,51 +115,55 @@ void CMDDInverseKinematic::ChainItem::set_stiffness(real_t p_stiffness) {
     }
 }
 
-void IKConstraintKusudama::optimizeLimitingAxes() {
-    IKAxes originalLimitingAxes = limiting_axes;
+void IKConstraintKusudama::optimize_limiting_axes() {
+    const IKAxes original_limiting_axes = limiting_axes;
+
+    Vector<Vector3> directions;
+    if (limit_cones.size() == 1) {
+        directions.push_back(directions.write[0] + limit_cones.write[0].get_control_point());
+    } else {
+        for (int cone_i = 0; cone_i < limit_cones.size() - 1; cone_i++) {
+            Vector3 this_c = limit_cones.write[cone_i].get_control_point();
+            Vector3 next_c = limit_cones.write[cone_i + 1].get_control_point();
+            Quat this_to_next = Quat(this_c, next_c);
+            Vector3 axis;
+            real_t angle;
+            Basis(this_to_next).get_axis_angle(axis, angle);
+            Quat half_this_to_next = Quat(axis, angle / 2.0f);
+
+            Vector3 half_angle = Basis(half_this_to_next).rotated(this_c).get_euler();
+            half_angle.normalize();
+            half_angle *= this_to_next.get_euler();
+            directions.push_back(half_angle);
+        }
+    }
+
+    Vector3 newY;
+    for (int32_t direction_i = 0; direction_i <
+                                  directions.size(); direction_i++) {
+        newY += directions[direction_i];
+    }
+
+    newY /= directions.size();
+    if (newY.length() != 0 && !Math::is_nan(newY.y)) {
+        newY.normalize();
+    } else {
+        newY = Vector3(0.0, 1.0f, 0.0);
+    }
+
+    Ray newYRay = Ray(Vector3(0.0, 0.0, 0.0), newY);
+
+    //TODO
+//    Quat oldYtoNewY = Quat(limiting_axes.y_().heading(), original_limiting_axes.getGlobalOf(newYRay).heading());
+//    limiting_axes.rotate(oldYtoNewY);
 //
-//        ArrayList < Vec3f< ?>> directions = new ArrayList<>();
-//        if (getLimitCones().size() == 1) {
-//            directions.add((limitCones.get(0).getControlPoint()).copy());
-//        } else {
-//            for (int i = 0; i < getLimitCones().size() - 1; i++) {
-//                Vec3f< ?> thisC = getLimitCones().get(i).getControlPoint().copy();
-//                Vec3f< ?> nextC = getLimitCones().get(i + 1).getControlPoint().copy();
-//                Rot thisToNext = new Rot(thisC, nextC);
-//                Rot halfThisToNext = new Rot(thisToNext.getAxis(), thisToNext.getAngle() / 2f);
-//
-//                Vec3f< ?> halfAngle = halfThisToNext.applyToCopy(thisC);
-//                halfAngle.normalize();
-//                halfAngle.mult(thisToNext.getAngle());
-//                directions.add(halfAngle);
-//            }
-//        }
-//
-//        Vec3f< ?> newY = new SGVec_3f();
-//        for (Vec3f< ?> dv:
-//        directions) {
-//            newY.add(dv);
-//        }
-//
-//        newY.div(directions.size());
-//        if (newY.mag() != 0 && !Float.isNaN(newY.y)) {
-//            newY.normalize();
-//        } else {
-//            newY = new SGVec_3f(0, 1f, 0);
-//        }
-//
-//        sgRayf newYRay = new sgRayf(new SGVec_3f(0, 0, 0), newY);
-//
-//        Rot oldYtoNewY = new Rot(limitingAxes.y_().heading(), originalLimitingAxes.getGlobalOf(newYRay).heading());
-//        limitingAxes.rotateBy(oldYtoNewY);
-//
-//        for (AbstractLimitCone lc : getLimitCones()) {
-//            originalLimitingAxes.setToGlobalOf(lc.controlPoint, lc.controlPoint);
-//            limitingAxes.setToLocalOf(lc.controlPoint, lc.controlPoint);
-//            lc.controlPoint.normalize();
-//        }
-//
-//        updateTangentRadii();
+//    for (int32_t limit_cone_i =0 ;limit_cone_i<limit_cones.size(); limit_cone_i++) {
+//        IKLimitCone lc = limit_cones[limit_cone_i];
+//        original_limiting_axes.setToGlobalOf(lc.get_control_point(), lc.get_control_point());
+//        limiting_axes.setToLocalOf(lc.get_control_point(), lc.get_control_point());
+//        lc.get_control_point().normalize();
+//    }
+    update_tangent_radii();
 }
 
 void IKConstraintKusudama::set_axial_limits(float p_min_angle, float p_in_range) {
@@ -1630,7 +1634,7 @@ void IKConstraintKusudama::set_axes_to_orientation_snap(IKAxes p_to_set, IKAxes 
     inBounds.push_back(1.f);
     bone_ray.position = Vector3(p_to_set.origin);
     //TODO
-    // bone_ray.normal = toSet.origin.y * attachedTo->boneHeight;
+    // bone_ray.normal = toSet.origin.y * attached_to->boneHeight;
     // Vector3 inLimits = pointInLimits(bone_ray.normal, inBounds, limitingAxes);
 
     // if (inBounds[0] == -1 && inLimits != Vector3()) {
@@ -1935,6 +1939,19 @@ CMDDInverseKinematic::ChainItem *CMDDInverseKinematic::ChainTarget::for_bone() {
 void CMDDInverseKinematic::ChainTarget::removal_notification() {
     for (int32_t target_i = 0; target_i < childPins.size(); target_i++) {
         childPins.write[target_i]->set_parent_pin(get_parent_pin());
+    }
+}
+
+void IKConstraintKusudama::set_pain(real_t p_amount) {
+    pain = p_amount;
+    if (attached_to != NULL && attached_to->parent_armature != NULL) {
+        CMDDInverseKinematic::Chain *s = attached_to->parent_armature;
+        if (s != NULL) {
+            CMDDInverseKinematic::ChainItem *wb = s->chain_root.find_child(attached_to->bone);
+            if (wb != NULL) {
+                wb->update_cos_dampening();
+            }
+        }
     }
 }
 

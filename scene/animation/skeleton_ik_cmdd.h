@@ -223,157 +223,6 @@ public:
     virtual float get_rotational_freedom() const = 0;
 };
 
-class IKConstraintKusudama : public IKConstraint {
-GDCLASS(IKConstraintKusudama, IKConstraint);
-
-private:
-    /**
-     * An array containing all of the Kusudama's limitCones. The kusudama is built up
-     * with the expectation that any limitCone in the array is connected to the cone at the previous element in the array,
-     * and the cone at the next element in the array.
-     */
-    Vector<IKLimitCone> limit_cones;
-    /**
-     * Defined as some Angle in radians about the limitingAxes Y axis, 0 being equivalent to the
-     * limitingAxes Z axis.
-     */
-    float minAxialAngle = Math_PI;
-
-    bool orientation_constrained = false;
-    bool axial_constrained = false;
-    IKAxes limiting_axes;
-    //TODO
-    // CMDDInverseKinematic::ChainItem *attachedTo = NULL;
-    Ray bone_ray;
-    Ray constrained_ray;
-
-protected:
-    /**
-     * Defined as some Angle in radians about the limitingAxes Y axis, 0 being equivalent to the
-     * limitingAxes Z axis.
-     */
-    real_t min_axial_angle = Math_PI;
-    /**
-     * Defined as some Angle in radians about the limitingAxes Y axis, 0 being equivalent to the
-     * minAxialAngle
-     */
-    real_t range = Math_PI * 3.0f;
-    real_t pain;
-    real_t rotational_freedom = 1.0f;
-
-    real_t get_rotational_freedom() const;
-
-    /**
-     * @return a measure of the rotational freedom afforded by this constraint.
-     * with 0 meaning no rotational freedom (the bone is essentially stationary in relation to its parent)
-     * and 1 meaning full rotational freedom (the bone is completely unconstrained).
-     *
-     * This should be computed as ratio between orientations a bone can be in and orientations
-     * a bone cannot be in as defined by its representation as a point on the surface of a hypersphere.
-     */
-    virtual void update_rotational_freedom();
-
-public:
-    IKConstraintKusudama() {
-    }
-
-    // IKConstraintKusudama(CMDDInverseKinematic::ChainItem *p_for_bone) {
-    //TODO
-    // attachedTo = p_for_bone;
-    // limiting_axes = p_for_bone->getMajorRotationAxes();
-    // attachedTo->addConstraint(this);
-    // enable();
-    // }
-    virtual void snap_to_limits() {}
-
-    virtual void disable() {}
-
-    virtual void enable() {}
-
-    virtual bool is_enabled() const { return false; }
-
-    //returns true if the ray from the constraint origin to the globalPoint is within the constraint's limits
-    //false otherwise.
-    virtual bool is_in_limits_(const Vector3 p_global_point) const;
-
-    virtual IKAxes get_limiting_axes() const;
-
-    virtual void set_limiting_axes(const IKAxes &p_limiting_axes);
-
-    virtual real_t get_pain();
-
-    virtual real_t to_tau(real_t p_angle);
-
-    virtual Vector3 point_on_path_sequence(IKAxes p_global_xform, Vector3 p_in_point, IKAxes p_limiting_axes);
-
-    virtual real_t signed_angle_difference(real_t p_min_angle, real_t p_base);
-
-    virtual real_t angle_to_twist_center(IKAxes p_global_xform, IKAxes p_to_set, IKAxes p_limiting_axes);
-
-    virtual void set_axes_to_returnfulled(IKAxes p_global_xform, IKAxes p_to_set, IKAxes p_limiting_axes,
-                                          real_t p_cos_half_angle_dampen, real_t p_angle_dampen);
-
-    /**
-     *
-     * @param p_to_set
-     * @param p_limiting_axes
-     * @return radians of twist required to snap bone into twist limits (0 if bone is already in twist limits)
-     */
-    virtual real_t snap_to_twist_limits(IKAxes p_to_set, IKAxes p_limiting_axes);
-
-    /**
-     * Presumes the input axes are the bone's localAxes, and rotates
-     * them to satisfy the snap limits.
-     *
-     * @param p_to_set
-     */
-    virtual void set_axes_to_orientation_snap(IKAxes p_to_set, IKAxes p_limiting_axes, float p_cos_half_angle_dampen);;
-
-    virtual void set_axes_to_snapped(IKAxes p_to_set, IKAxes p_limiting_axes, float p_cos_half_angle_dampen);;
-
-    virtual void constraint_update_notification();
-
-    /**
-     * This function should be called after you've set all of the Limiting Cones
-     * for this Kusudama. It will orient the axes relative to which constrained rotations are computed
-     * so as to minimize the potential for undesirable twist rotations due to antipodal singularities.
-     *
-     * In general, auto-optimization attempts to point the y-component of the constraint
-     * axes in the direction that places it within an oreintation allowed by the constraint,
-     * and roughly as far as possible from any orientations not allowed by the constraint.
-     */
-    virtual void optimizeLimitingAxes();
-
-    virtual void update_tangent_radii();
-
-    virtual IKLimitCone create_limit_cone_for_index(int p_insert_at, Vector3 p_new_point, float p_radius);
-
-    /**
-     * Adds a LimitCone to the Kusudama. LimitCones are reach cones which can be arranged sequentially. The Kusudama will infer
-     * a smooth path leading from one LimitCone to the next.
-     *
-     * Using a single LimitCone is functionally equivalent to a classic reachCone constraint.
-     *
-     * @param p_insert_at the intended index for this LimitCone in the sequence of LimitCones from which the Kusudama will infer a path. @see IK.AbstractKusudama.limitCones limitCones array.
-     * @param p_new_point where on the Kusudama to add the LimitCone (in Kusudama's local coordinate frame defined by its bone's majorRotationAxes))
-     * @param p_radius the radius of the limitCone
-     */
-    void add_limit_cone_at_index(int p_insert_at, Vector3 p_new_point, float p_radius);
-
-    /**
-     * Kusudama constraints decompose the bone orientation into a swing component, and a twist component.
-     * The "Swing" component is the final direction of the bone. The "Twist" component represents how much
-     * the bone is rotated about its own final direction. Where limit cones allow you to constrain the "Swing"
-     * component, this method lets you constrain the "twist" component.
-     *
-     * @param p_min_angle some angle in radians about the major rotation frame's y-axis to serve as the first angle within the range that the bone is allowed to twist.
-     * @param p_in_range some angle in radians added to the minAngle. if the bone's local Z goes p_max_angle radians beyond the p_min_angle, it is considered past the limit.
-     * This value is always interpreted as being in the positive direction. For example, if this value is -PI/2, the entire range from p_min_angle to p_min_angle + 3PI/4 is
-     * considered valid.
-     */
-    void set_axial_limits(float p_min_angle, float p_in_range);
-};
-
 struct SkeletonIKConstraint : public Object {
 GDCLASS(SkeletonIKConstraint, Object);
 
@@ -1000,6 +849,172 @@ public:
 
     static void solve(Task *p_task, real_t blending_delta, bool override_effector_basis, bool p_use_magnet,
                       const Vector3 &p_magnet_position);
+};
+
+
+class IKConstraintKusudama : public IKConstraint {
+GDCLASS(IKConstraintKusudama, IKConstraint);
+
+private:
+    /**
+     * An array containing all of the Kusudama's limitCones. The kusudama is built up
+     * with the expectation that any limitCone in the array is connected to the cone at the previous element in the array,
+     * and the cone at the next element in the array.
+     */
+    Vector<IKLimitCone> limit_cones;
+    /**
+     * Defined as some Angle in radians about the limitingAxes Y axis, 0 being equivalent to the
+     * limitingAxes Z axis.
+     */
+    float minAxialAngle = Math_PI;
+
+    bool orientation_constrained = false;
+    bool axial_constrained = false;
+    IKAxes limiting_axes;
+    CMDDInverseKinematic::ChainItem *attached_to = NULL;
+    Ray bone_ray;
+    Ray constrained_ray;
+
+protected:
+    /**
+     * Defined as some Angle in radians about the limitingAxes Y axis, 0 being equivalent to the
+     * limitingAxes Z axis.
+     */
+    real_t min_axial_angle = Math_PI;
+    /**
+     * Defined as some Angle in radians about the limitingAxes Y axis, 0 being equivalent to the
+     * minAxialAngle
+     */
+    real_t range = Math_PI * 3.0f;
+    real_t pain;
+    real_t rotational_freedom = 1.0f;
+
+    real_t get_rotational_freedom() const;
+
+    /**
+     * @return a measure of the rotational freedom afforded by this constraint.
+     * with 0 meaning no rotational freedom (the bone is essentially stationary in relation to its parent)
+     * and 1 meaning full rotational freedom (the bone is completely unconstrained).
+     *
+     * This should be computed as ratio between orientations a bone can be in and orientations
+     * a bone cannot be in as defined by its representation as a point on the surface of a hypersphere.
+     */
+    virtual void update_rotational_freedom();
+
+public:
+    IKConstraintKusudama() {
+    }
+
+    IKConstraintKusudama(CMDDInverseKinematic::ChainItem *p_for_bone) {
+        attached_to = p_for_bone;
+//     limiting_axes = p_for_bone.getMajorRotationAxes();
+//     attached_to->parent_armature->addConstraint(this);
+        enable();
+    }
+
+    virtual void snap_to_limits() {}
+
+    virtual void disable() {}
+
+    virtual void enable() {}
+
+    virtual bool is_enabled() const { return false; }
+
+    //returns true if the ray from the constraint origin to the globalPoint is within the constraint's limits
+    //false otherwise.
+    virtual bool is_in_limits_(const Vector3 p_global_point) const;
+
+    virtual IKAxes get_limiting_axes() const;
+
+    virtual void set_limiting_axes(const IKAxes &p_limiting_axes);
+
+    virtual real_t get_pain();
+
+    /**
+     * A value between (ideally between 0 and 1) dictating
+     * how much the bone to which this kusudama belongs
+     * prefers to be away from the edges of the kusudama
+     * if it can. This is useful for avoiding unnatural poses,
+     * as the kusudama will push bones back into their more
+     * "comfortable" regions. Leave this value at its default of
+     * 0 unless you empirical observations show you need it.
+     * Setting this value to anything higher than 0.4 is probably overkill
+     * in most situations.
+     *
+     * @param p_amount
+     */
+    virtual void set_pain(real_t p_amount);
+
+    virtual real_t to_tau(real_t p_angle);
+
+    virtual Vector3 point_on_path_sequence(IKAxes p_global_xform, Vector3 p_in_point, IKAxes p_limiting_axes);
+
+    virtual real_t signed_angle_difference(real_t p_min_angle, real_t p_base);
+
+    virtual real_t angle_to_twist_center(IKAxes p_global_xform, IKAxes p_to_set, IKAxes p_limiting_axes);
+
+    virtual void set_axes_to_returnfulled(IKAxes p_global_xform, IKAxes p_to_set, IKAxes p_limiting_axes,
+                                          real_t p_cos_half_angle_dampen, real_t p_angle_dampen);
+
+    /**
+     *
+     * @param p_to_set
+     * @param p_limiting_axes
+     * @return radians of twist required to snap bone into twist limits (0 if bone is already in twist limits)
+     */
+    virtual real_t snap_to_twist_limits(IKAxes p_to_set, IKAxes p_limiting_axes);
+
+    /**
+     * Presumes the input axes are the bone's localAxes, and rotates
+     * them to satisfy the snap limits.
+     *
+     * @param p_to_set
+     */
+    virtual void set_axes_to_orientation_snap(IKAxes p_to_set, IKAxes p_limiting_axes, float p_cos_half_angle_dampen);;
+
+    virtual void set_axes_to_snapped(IKAxes p_to_set, IKAxes p_limiting_axes, float p_cos_half_angle_dampen);;
+
+    virtual void constraint_update_notification();
+
+    /**
+     * This function should be called after you've set all of the Limiting Cones
+     * for this Kusudama. It will orient the axes relative to which constrained rotations are computed
+     * so as to minimize the potential for undesirable twist rotations due to antipodal singularities.
+     *
+     * In general, auto-optimization attempts to point the y-component of the constraint
+     * axes in the direction that places it within an oreintation allowed by the constraint,
+     * and roughly as far as possible from any orientations not allowed by the constraint.
+     */
+    virtual void optimize_limiting_axes();
+
+    virtual void update_tangent_radii();
+
+    virtual IKLimitCone create_limit_cone_for_index(int p_insert_at, Vector3 p_new_point, float p_radius);
+
+    /**
+     * Adds a LimitCone to the Kusudama. LimitCones are reach cones which can be arranged sequentially. The Kusudama will infer
+     * a smooth path leading from one LimitCone to the next.
+     *
+     * Using a single LimitCone is functionally equivalent to a classic reachCone constraint.
+     *
+     * @param p_insert_at the intended index for this LimitCone in the sequence of LimitCones from which the Kusudama will infer a path. @see IK.AbstractKusudama.limitCones limitCones array.
+     * @param p_new_point where on the Kusudama to add the LimitCone (in Kusudama's local coordinate frame defined by its bone's majorRotationAxes))
+     * @param p_radius the radius of the limitCone
+     */
+    void add_limit_cone_at_index(int p_insert_at, Vector3 p_new_point, float p_radius);
+
+    /**
+     * Kusudama constraints decompose the bone orientation into a swing component, and a twist component.
+     * The "Swing" component is the final direction of the bone. The "Twist" component represents how much
+     * the bone is rotated about its own final direction. Where limit cones allow you to constrain the "Swing"
+     * component, this method lets you constrain the "twist" component.
+     *
+     * @param p_min_angle some angle in radians about the major rotation frame's y-axis to serve as the first angle within the range that the bone is allowed to twist.
+     * @param p_in_range some angle in radians added to the minAngle. if the bone's local Z goes p_max_angle radians beyond the p_min_angle, it is considered past the limit.
+     * This value is always interpreted as being in the positive direction. For example, if this value is -PI/2, the entire range from p_min_angle to p_min_angle + 3PI/4 is
+     * considered valid.
+     */
+    void set_axial_limits(float p_min_angle, float p_in_range);
 };
 
 class SkeletonIKCMDD : public SkeletonIKObject {
