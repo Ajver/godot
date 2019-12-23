@@ -41,8 +41,8 @@ void CMDDInverseKinematic::QCPSolver(
         int p_stabilization_passes,
         int p_iteration,
         float p_total_iterations) {
-    for (int32_t tip_i = 0; tip_i < p_chain.effectors.size(); tip_i++) {
-        ChainItem *start_from = p_chain.effectors[tip_i].chain_item;
+    for (int32_t tip_i = 0; tip_i < p_chain.targets.size(); tip_i++) {
+        ChainItem *start_from = p_chain.targets[tip_i].chain_item;
         ChainItem *stop_after = &p_chain.chain_root;
 
         ChainItem *current_bone = start_from;
@@ -120,7 +120,7 @@ bool CMDDInverseKinematic::build_chain(Task *p_task, bool p_force_simple_chain) 
 
     Chain &chain(p_task->chain);
 
-    chain.effectors.resize(p_task->end_effectors.size());
+    chain.targets.resize(p_task->end_effectors.size());
     chain.chain_root.bone = p_task->root_bone;
     chain.chain_root.initial_transform = p_task->skeleton->get_bone_global_pose(chain.chain_root.bone);
     chain.chain_root.current_pos = chain.chain_root.initial_transform.origin;
@@ -182,8 +182,8 @@ bool CMDDInverseKinematic::build_chain(Task *p_task, bool p_force_simple_chain) 
             chain.middle_chain_item = NULL;
 
         // Initialize current tip
-        chain.effectors.write[x].chain_item = sub_chain;
-        chain.effectors.write[x].end_effector = ee;
+        chain.targets.write[x].chain_item = sub_chain;
+        chain.targets.write[x].end_effector = ee;
 
         // Allow multieffector
         // if (p_force_simple_chain) {
@@ -325,10 +325,10 @@ void CMDDInverseKinematic::solve(Task *p_task, real_t blending_delta, bool overr
         } else {
             // Set target orientation to tip
             if (override_tip_basis)
-                new_bone_pose.basis = p_task->chain.effectors[0].end_effector->goal_transform.basis;
+                new_bone_pose.basis = p_task->chain.targets[0].end_effector->goal_transform.basis;
             else
                 new_bone_pose.basis =
-                        new_bone_pose.basis * p_task->chain.effectors[0].end_effector->goal_transform.basis;
+                        new_bone_pose.basis * p_task->chain.targets[0].end_effector->goal_transform.basis;
         }
 
         p_task->skeleton->set_bone_global_pose_override(ci->bone, new_bone_pose, 1.0);
@@ -411,8 +411,8 @@ void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(CMDDInv
     Quat quat;
     quat.set_euler(p_for_bone->current_ori);
     bone_xform.basis = Basis(quat);
-    update_target_headings(r_chain.localized_target_headings, r_chain.weights, bone_xform);
-    update_effector_headings(r_chain.localized_effector_headings, bone_xform);
+    update_target_headings(r_chain, r_chain.localized_target_headings, r_chain.weights, bone_xform);
+    update_effector_headings(r_chain, r_chain.localized_effector_headings, bone_xform);
 
     float best_rmsd = 0.0f;
     QCP qcp_convergence_check = QCP(FLT_EPSILON, FLT_EPSILON);
@@ -434,7 +434,7 @@ void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(CMDDInv
                 p_total_iterations);
 
         if (p_stabilization_passes > 0) {
-            update_effector_headings(r_chain.localized_effector_headings, bone_xform);
+            update_effector_headings(r_chain, r_chain.localized_effector_headings, bone_xform);
             new_rmsd = get_manual_msd(r_chain.localized_effector_headings, r_chain.localized_target_headings, r_chain.weights);
 
             if (best_rmsd >= new_rmsd) {
@@ -454,7 +454,7 @@ void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(CMDDInv
                                                          p_for_bone->cos_half_returnfullness_dampened[p_iteration],
                                                          p_for_bone->half_returnfullness_dampened[p_iteration]);
                     }
-                    update_effector_headings(r_chain.localized_effector_headings, bone_xform);
+                    update_effector_headings(r_chain, r_chain.localized_effector_headings, bone_xform);
                     new_rmsd = get_manual_msd(r_chain.localized_effector_headings, r_chain.localized_target_headings, r_chain.weights);
                 }
                 best_orientation = bone_xform.basis.get_rotation_quat();
@@ -490,14 +490,87 @@ real_t CMDDInverseKinematic::get_manual_msd(PoolVector3Array &r_localized_effect
 }
 
 void
-CMDDInverseKinematic::update_target_headings(PoolVector3Array &r_localized_target_headings, PoolRealArray p_weights,
-                                             Transform p_bone_xform) {
-    //TODO
+CMDDInverseKinematic::update_target_headings(Chain &r_chain, PoolVector3Array &r_localized_target_headings,
+                                             PoolRealArray p_weights, Transform p_bone_xform) {
+
+    int hdx = 0;
+    for (int target_i = 0; target_i < r_chain.targets.size(); target_i++) {
+        ChainItem *sb = r_chain.targets[target_i].chain_item;
+        IKAxes targetAxes = sb->constraint->get_limiting_axes();
+        Vector3 origin = sb->current_pos;
+        r_localized_target_headings[hdx] = targetAxes.origin - origin;
+        uint8_t modeCode = r_chain.targets[target_i].get_mode_code();
+        hdx++;
+        if ((modeCode & ChainTarget::XDir) != 0) {
+            Ray xTarget;
+            xTarget.normal = Vector3(1, 0, 0);
+            xTarget.position = xTarget.normal * targetAxes.basis.get_axis(x_axis);
+            r_localized_target_headings[hdx] = xTarget.position - origin;
+            // xTarget.position = xTarget.setToInvertedTip(r_localized_target_headings[hdx + 1]) - origin;
+            hdx += 2;
+        }
+        if ((modeCode & ChainTarget::YDir) != 0) {
+            Ray yTarget;
+            yTarget.normal = Vector3(0, 1, 0);
+            yTarget.position = yTarget.normal * targetAxes.basis.get_axis(y_axis);
+            r_localized_target_headings[hdx] = yTarget.position - origin;
+            // yTarget.position = yTarget.setToInvertedTip(r_localized_target_headings[hdx + 1]) - origin;
+            hdx += 2;
+        }
+        if ((modeCode & ChainTarget::ZDir) != 0) {
+            Ray zTarget;
+            zTarget.normal = Vector3(0, 0, 1);
+            zTarget.position = zTarget.normal * targetAxes.basis.get_axis(z_axis);
+            r_localized_target_headings[hdx] = zTarget.position - origin;
+            // zTarget.position = zTarget.setToInvertedTip(r_localized_target_headings[hdx + 1]) - origin;
+            hdx += 2;
+        }
+    }
 }
 
 void
-CMDDInverseKinematic::update_effector_headings(PoolVector3Array &r_localized_effector_headings, Transform p_bone_xform) {
-    //TODO
+CMDDInverseKinematic::update_effector_headings(Chain &r_chain, PoolVector3Array &r_localized_effector_headings,
+                                               Transform p_bone_xform) {
+    int hdx = 0;
+    for (int target_i = 0; target_i < r_chain.targets.size(); target_i++) {
+        ChainItem *sb = r_chain.targets[target_i].chain_item;
+        IKAxes effector = r_chain.targets[target_i].end_effector->goal_transform;
+        // tipAxes.updateGlobal();
+        Vector3 origin = sb->current_pos;
+        r_localized_effector_headings[hdx] = effector.origin - origin;
+        uint8_t modeCode = r_chain.targets[target_i].get_mode_code();
+        hdx++;
+
+        if ((modeCode & ChainTarget::XDir) != 0) {
+            Ray xEffector;
+            xEffector.normal = Vector3(1, 0, 0);
+            xEffector.position = xEffector.normal * effector.basis.get_axis(x_axis);
+
+            r_localized_effector_headings[hdx] = xEffector.position - origin;
+            // xTip.setToInvertedTip(r_localized_effector_headings[hdx+1]).sub(origin);
+            hdx += 2;
+        }
+        if ((modeCode & ChainTarget::YDir) != 0) {
+            Ray yEffector;
+
+            yEffector.normal = Vector3(0, 1, 0);
+            yEffector.position = yEffector.normal * effector.basis.get_axis(y_axis);
+
+            r_localized_effector_headings[hdx] = yEffector.position - origin;
+            // yEffector.setToInvertedTip(r_localized_effector_headings[hdx+1]).sub(origin);
+            hdx += 2;
+        }
+        if ((modeCode & ChainTarget::ZDir) != 0) {
+            Ray zEffector;
+
+            zEffector.normal = Vector3(0, 0, 1);
+            zEffector.position = zEffector.normal * effector.basis.get_axis(z_axis);
+
+            r_localized_effector_headings[hdx] = zEffector.position - origin;
+            // zEffector.setToInvertedTip(r_localized_effector_headings[hdx+1]).sub(origin);
+            hdx += 2;
+        }
+    }
 }
 
 void SkeletonIKCMDD::_validate_property(PropertyInfo &property) const {
@@ -1669,4 +1742,160 @@ void IKQuat::clamp_to_angle(real_t p_angle) {
 
 int CMDDInverseKinematic::Chain::get_default_iterations() const {
     return ik_iterations;
+}
+
+void
+CMDDInverseKinematic::ChainTarget::set_target_priorities(float p_x_priority, float p_y_priority, float p_z_priority) {
+    bool xDir = p_x_priority > 0 ? true : false;
+    bool yDir = p_y_priority > 0 ? true : false;
+    bool zDir = p_z_priority > 0 ? true : false;
+    modeCode = 0;
+    if (xDir) modeCode += XDir;
+    if (yDir) modeCode += YDir;
+    if (zDir) modeCode += ZDir;
+
+    subTargetCount = 1;
+    if ((modeCode & 1) != 0) subTargetCount++;
+    if ((modeCode & 2) != 0) subTargetCount++;
+    if ((modeCode & 4) != 0) subTargetCount++;
+
+    xPriority = p_x_priority;
+    yPriority = p_y_priority;
+    zPriority = p_z_priority;
+    //TODO FIX
+    // chain_item->parent_item.rootwardlyUpdateFalloffCacheFrom(forBone);
+}
+
+real_t CMDDInverseKinematic::ChainTarget::get_depth_falloff() const {
+    return depthFalloff;
+}
+
+void CMDDInverseKinematic::ChainTarget::set_depth_falloff(float depth) {
+    depthFalloff = depth;
+    //TODO
+    // chain_item->parent_item->rootwardlyUpdateFalloffCacheFrom(forBone);
+}
+
+void CMDDInverseKinematic::ChainTarget::disable() {
+    enabled = false;
+}
+
+void CMDDInverseKinematic::ChainTarget::enable() {
+    enabled = true;
+}
+
+void CMDDInverseKinematic::ChainTarget::toggle() {
+    if (is_enabled()) {
+        disable();
+    } else {
+        enable();
+    }
+}
+
+bool CMDDInverseKinematic::ChainTarget::is_enabled() const {
+    return enabled;
+}
+
+int CMDDInverseKinematic::ChainTarget::get_subtarget_count() {
+    return subTargetCount;
+}
+
+uint8_t CMDDInverseKinematic::ChainTarget::get_mode_code() const {
+    return modeCode;
+}
+
+real_t CMDDInverseKinematic::ChainTarget::get_x_priority() const {
+    return xPriority;
+}
+
+real_t CMDDInverseKinematic::ChainTarget::get_y_priority() const {
+    return yPriority;
+}
+
+real_t CMDDInverseKinematic::ChainTarget::get_z_priority() const {
+    return zPriority;
+}
+
+IKAxes CMDDInverseKinematic::ChainTarget::get_axes() const {
+    IKAxes axes = IKAxes(Basis(chain_item->current_ori), chain_item->current_pos);
+    return axes;
+}
+
+void CMDDInverseKinematic::ChainTarget::align_to_axes(IKAxes inAxes) {
+    //TODO
+    // axes.alignGlobalsTo(inAxes);
+    //Rot rotation = new Rot(axes.x().heading(), axes.y().heading(), inAxes.x().heading(), inAxes.y().heading());
+}
+
+void CMDDInverseKinematic::ChainTarget::translate_global(Vector3 location) {
+    chain_item->initial_transform.origin *= location;
+}
+
+void CMDDInverseKinematic::ChainTarget::translate(Vector3 location) {
+    chain_item->current_pos *= location;
+}
+
+Vector3 CMDDInverseKinematic::ChainTarget::get_location() {
+    return chain_item->current_pos;
+}
+
+CMDDInverseKinematic::ChainItem *CMDDInverseKinematic::ChainTarget::for_bone() {
+    return chain_item;
+}
+
+void CMDDInverseKinematic::ChainTarget::removal_notification() {
+    for (int32_t target_i = 0; target_i < childPins.size(); target_i++) {
+        childPins.write[target_i]->set_parent_pin(get_parent_pin());
+    }
+}
+
+void CMDDInverseKinematic::ChainTarget::set_parent_pin(CMDDInverseKinematic::ChainTarget *parent) {
+    if (parent_target != NULL) {
+        parent_target->remove_child_pin(this);
+    }
+    //set the parent to the global axes if the user
+    //tries to set the pin to be its own parent
+
+    if (parent != NULL) {
+        parent->add_child_pin(this);
+        parent_target = parent;
+    }
+}
+
+void CMDDInverseKinematic::ChainTarget::remove_child_pin(CMDDInverseKinematic::ChainTarget *child) {
+    int32_t target_i = childPins.find(child);
+    if (target_i != -1) {
+        childPins.remove(target_i);
+    }
+}
+
+void CMDDInverseKinematic::ChainTarget::add_child_pin(CMDDInverseKinematic::ChainTarget *newChild) {
+    if (newChild->is_ancestor_of(this)) {
+        set_parent_pin(newChild->get_parent_pin());
+    }
+    if (childPins.find(newChild) != -1) {
+        childPins.push_back(newChild);
+    }
+}
+
+CMDDInverseKinematic::ChainTarget *CMDDInverseKinematic::ChainTarget::get_parent_pin() {
+    return parent_target;
+}
+
+bool CMDDInverseKinematic::ChainTarget::is_ancestor_of(CMDDInverseKinematic::ChainTarget *potentialDescendent) {
+    bool result = false;
+    ChainTarget *cursor = potentialDescendent->get_parent_pin();
+    while (cursor) {
+        if (cursor == this) {
+            result = true;
+            break;
+        } else {
+            cursor = cursor->parent_target;
+        }
+    }
+    return result;
+}
+
+real_t CMDDInverseKinematic::ChainTarget::get_pin_weight() {
+    return pin_weight;
 }

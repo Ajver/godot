@@ -581,21 +581,147 @@ public:
 		void set_axes_to_returned(IKAxes p_global, IKAxes p_to_set, IKAxes p_limiting_axes, real_t p_cos_half_angle_dampen, real_t p_angle_dampen);
 		void set_axes_to_be_snapped(IKAxes p_to_set, IKAxes p_limiting_axes, real_t p_cos_half_angle_dampen);
 	};
-	struct ChainEffector {
-		ChainItem *chain_item;
-		const EndEffector *end_effector;
+	struct ChainTarget {
+        ChainItem *chain_item;
+        const EndEffector *end_effector;
 
-		ChainEffector() :
-				chain_item(NULL),
-				end_effector(NULL) {}
+        ChainTarget() :
+                chain_item(NULL),
+                end_effector(NULL) {}
 
-		ChainEffector(ChainItem *p_chain_item, const EndEffector *p_end_effector) :
-				chain_item(p_chain_item),
-				end_effector(p_end_effector) {}
+        ChainTarget(ChainItem *p_chain_item, const EndEffector *p_end_effector) :
+                chain_item(p_chain_item),
+                end_effector(p_end_effector) {}
 
-		ChainEffector(const ChainEffector &p_other_ct) :
-				chain_item(p_other_ct.chain_item),
-				end_effector(p_other_ct.end_effector) {}
+        ChainTarget(const ChainTarget &p_other_ct) :
+                chain_item(p_other_ct.chain_item),
+                end_effector(p_other_ct.end_effector) {}
+
+        ChainTarget(ChainItem *p_chain_item, const EndEffector *p_end_effector, bool p_enabled) {
+            enabled = p_enabled;
+            set_target_priorities(xPriority, yPriority, zPriority);
+        }
+
+    protected:
+        bool enabled;
+        ChainTarget *parent_target;
+        Vector<ChainTarget *> childPins;
+        float pin_weight = 1;
+        uint8_t modeCode = 7;
+        int subTargetCount = 4;
+        real_t xPriority = 1.0f, yPriority = 1.0f, zPriority = 1.0f;
+        real_t depthFalloff = 0.0f;
+
+    public:
+        static const short XDir = 1, YDir = 2, ZDir = 4;
+        bool is_enabled() const;
+        void toggle();
+        void enable();
+        void disable();
+
+        /**
+         * Pins can be ultimate targets, or intermediary targets.
+         * By default, each pin is treated as an ultimate target, meaning
+         * any bones which are ancestors to that pin's end-effector
+         * are not aware of any pins wich are target of bones descending from that end effector.
+         *
+         * Changing this value makes ancestor bones aware, and also determines how much less
+         * they care with each level down.
+         *
+         * Presuming all descendants of this pin have a falloff of 1, then:
+         * A pin falloff of 0 on this pin means only this pin is reported to ancestors.
+         * A pin falloff of 1 on this pin means ancestors care about all descendant pins equally (after accounting for their pinWeight),
+         * regardless of how many levels down they are.
+         * A pin falloff of 0.5 means each descendant pin is cared about half as much as its ancestor.
+         *
+         * With each level, the pin falloff of a descendant is taken account for each level.
+         *  Meaning, if this pin has a falloff of 1, and its descendent has a falloff of 0.5
+         *  then this pin will be reported with full weight,
+         *  it descendant will be reported with full weight,
+         *  the descendant of that pin will be reported with half weight.
+         *  the desecendant of that one's descendant will be reported with quarter weight.
+         *
+         * @param depth
+         */
+        void set_depth_falloff(float depth);
+
+        real_t get_depth_falloff() const;
+
+        /**
+         * Sets  the priority of the orientation bases which effectors reaching for this target will and won't align with.
+         * If all are set to 0, then the target is treated as a simple position target.
+         * It's usually better to set at least on of these three values to 0, as giving a nonzero value to all three is most often redundant.
+         *
+         *  This values this function sets are only considered by the orientation aware solver.
+         *
+         * @param position
+         * @param xPriority set to a positive value (recommended between 0 and 1) if you want the bone's x basis to point in the same direction as this target's x basis (by this library's convention the x basis corresponds to a limb's twist)
+         * @param yPriority set to a positive value (recommended between 0 and 1)  if you want the bone's y basis to point in the same direction as this target's y basis (by this library's convention the y basis corresponds to a limb's direction)
+         * @param zPriority set to a positive value (recommended between 0 and 1)  if you want the bone's z basis to point in the same direction as this target's z basis (by this library's convention the z basis corresponds to a limb's twist)
+         */
+        void set_target_priorities(float p_x_priority, float p_y_priority, float p_z_priority);
+
+        /**
+         * @return the number of bases an effector to this target will attempt to align on.
+         */
+        int get_subtarget_count();
+
+        uint8_t get_mode_code() const;
+
+        /**
+         * @return the priority of this pin's x axis;
+         */
+        real_t get_x_priority() const;
+
+        /**
+         * @return the priority of this pin's y axis;
+         */
+        real_t get_y_priority() const;
+
+        /**
+         * @return the priority of this pin's z axis;
+         */
+        real_t get_z_priority() const;
+
+        IKAxes get_axes() const;
+
+        /**
+         * translates and rotates the pin to match the position
+         * and orientation of the input Axes. The orientation
+         * is only relevant for orientation aware solvers.
+         * @param inAxes
+         */
+        void align_to_axes(IKAxes inAxes);
+
+        /**
+         * translates the pin to the location specified in global coordinates
+         * @param location
+         */
+        void translate_global(Vector3 location);
+
+        /**
+         * translates the pin to the location specified in local coordinates
+         * (relative to any other Axes objects the pin may be parented to)
+         * @param location
+         */
+        void translate(Vector3 location);
+
+        /**
+         * @return the pin locationin global coordinates
+         */
+        Vector3 get_location();
+        ChainItem *for_bone();
+
+        /**
+         * called when this pin is being removed entirely from the Armature. (as opposed to just being disabled)
+         */
+        void removal_notification();
+        void set_parent_pin(ChainTarget *parent);
+        void remove_child_pin(ChainTarget *child);
+        void add_child_pin(ChainTarget *newChild);
+        ChainTarget *get_parent_pin();
+        bool is_ancestor_of(ChainTarget *potentialDescendent);
+        real_t get_pin_weight();
 	};
 
 	struct Chain {
@@ -603,7 +729,7 @@ public:
 	public:
 		ChainItem chain_root;
 		ChainItem *middle_chain_item;
-		Vector<ChainEffector> effectors;
+		Vector<ChainTarget> targets;
 		Vector3 magnet_position;
 		PoolVector3Array localized_target_headings;
 		PoolVector3Array localized_effector_headings;
@@ -685,6 +811,9 @@ private:
 	static void solve_simple(Task *p_task, bool p_solve_magnet);
 
 public:
+    static const int32_t x_axis = 0;
+    static const int32_t y_axis = 1;
+    static const int32_t z_axis = 2;
 	/**
 	 *
 	 * @param for_bone
@@ -703,8 +832,10 @@ public:
 			int p_iteration,
 			int p_total_iterations);
 	static real_t get_manual_msd(PoolVector3Array &r_localized_effector_headings, PoolVector3Array &r_localized_target_headings, const PoolRealArray &p_weights);
-	static void update_target_headings(PoolVector3Array &r_localized_target_headings, PoolRealArray p_weights, Transform p_bone_xform);
-	static void update_effector_headings(PoolVector3Array &r_localized_effector_headings, Transform p_bone_xform);
+	static void update_target_headings(Chain &r_chain, PoolVector3Array &r_localized_target_headings,
+                                       PoolRealArray p_weights, Transform p_bone_xform);
+	static void update_effector_headings(Chain &r_chain, PoolVector3Array &r_localized_effector_headings,
+                                         Transform p_bone_xform);
 	static Task *create_simple_task(Skeleton *p_sk, BoneId root_bone, BoneId effector_bone, const Transform &goal_transform, real_t p_dampening = -1, int p_stabilizing_passes = -1, Ref<SkeletonIKConstraints> p_constraints = NULL);
 	static void free_task(Task *p_task);
 	// The goal of chain should be always in local space
