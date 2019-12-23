@@ -1944,15 +1944,18 @@ void CMDDInverseKinematic::ChainTarget::removal_notification() {
 
 void IKConstraintKusudama::set_pain(real_t p_amount) {
     pain = p_amount;
-    if (attached_to != NULL && attached_to->parent_armature != NULL) {
-        CMDDInverseKinematic::Chain *s = attached_to->parent_armature;
-        if (s != NULL) {
-            CMDDInverseKinematic::ChainItem *wb = s->chain_root.find_child(attached_to->bone);
-            if (wb != NULL) {
-                wb->update_cos_dampening();
-            }
-        }
+    if (attached_to == NULL || attached_to->parent_armature == NULL) {
+        return;
     }
+    CMDDInverseKinematic::Chain *s = attached_to->parent_armature;
+    if (s == NULL) {
+        return;
+    }
+    CMDDInverseKinematic::ChainItem *wb = s->chain_root.find_child(attached_to->bone);
+    if (wb == NULL) {
+        return;
+    }
+    wb->update_cos_dampening();
 }
 
 void CMDDInverseKinematic::ChainTarget::set_parent_pin(CMDDInverseKinematic::ChainTarget *parent) {
