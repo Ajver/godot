@@ -855,6 +855,39 @@ public:
 };
 
 
+class IKLimitAxial : public Resource {
+    GDCLASS(IKLimitAxial, Resource);
+    /**
+     * Defined as some Angle in radians about the limitingAxes Y axis, 0 being equivalent to the
+     * limitingAxes Z axis.
+     */
+    real_t min_axial_angle = Math_PI;
+    /**
+     * Defined as some Angle in radians about the limitingAxes Y axis, 0 being equivalent to the
+     * minAxialAngle
+     */
+    real_t range = Math_PI / 2.0;
+protected:
+    static void _bind_methods();
+public:
+    real_t get_min_axial_angle() const;
+    void set_min_axial_angle(real_t p_min_axial_angle);
+    real_t get_range() const;
+    void set_range(real_t p_range);
+    real_t get_min_axial_angle_degree() const {
+        return Math::deg2rad(get_min_axial_angle());
+    }
+    void set_min_axial_angle_degree(real_t p_min_axial_angle) {
+        set_min_axial_angle(Math::rad2deg(p_min_axial_angle));
+    }
+    real_t get_range_degree() const {
+        return Math::rad2deg(get_range());
+    }
+    void set_range_degree(real_t p_range) {
+        set_range(Math::deg2rad(p_range));
+    }
+};
+
 class IKConstraintKusudama : public IKConstraint {
 GDCLASS(IKConstraintKusudama, IKConstraint);
 
@@ -865,11 +898,6 @@ private:
      * and the cone at the next element in the array.
      */
     Vector<Ref<IKLimitCone>> limit_cones;
-    /**
-     * Defined as some Angle in radians about the limitingAxes Y axis, 0 being equivalent to the
-     * limitingAxes Z axis.
-     */
-    float minAxialAngle = Math_PI;
 
     bool orientation_constrained = false;
     bool axial_constrained = false;
@@ -879,17 +907,9 @@ private:
     Ray constrained_ray;
 
 protected:
-    /**
-     * Defined as some Angle in radians about the limitingAxes Y axis, 0 being equivalent to the
-     * limitingAxes Z axis.
-     */
-    real_t min_axial_angle = Math_PI;
-    /**
-     * Defined as some Angle in radians about the limitingAxes Y axis, 0 being equivalent to the
-     * minAxialAngle
-     */
-    real_t range = Math_PI * 3.0f;
-    real_t pain;
+    static void _bind_methods();
+    Ref<IKLimitAxial> axial_limit;
+    real_t pain = 0.0f;
     real_t rotational_freedom = 1.0f;
 
     real_t get_rotational_freedom() const;
@@ -909,14 +929,20 @@ protected:
 
 public:
     IKConstraintKusudama() {
+        axial_limit.instance();
     }
 
     IKConstraintKusudama(CMDDInverseKinematic::ChainItem *p_for_bone) {
+        axial_limit.instance();
         attached_to = p_for_bone;
 //     limiting_axes = p_for_bone.getMajorRotationAxes();
 //     attached_to->parent_armature->addConstraint(this);
         enable();
     }
+
+    virtual Ref<IKLimitAxial> get_axial_limit() const;
+
+    virtual void set_axial_limit(Ref<IKLimitAxial> p_axial_limit);
 
     virtual void snap_to_limits() {}
 
@@ -951,7 +977,9 @@ public:
      */
     virtual void set_pain(real_t p_amount);
 
-    virtual real_t to_tau(real_t p_angle);
+    virtual real_t to_tau(real_t p_angle) const;
+
+    virtual real_t from_tau(real_t p_tau) const;
 
     virtual Vector3 point_on_path_sequence(IKAxes p_global_xform, Vector3 p_in_point, IKAxes p_limiting_axes);
 

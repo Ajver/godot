@@ -368,6 +368,7 @@ void register_scene_types() {
 	ClassDB::register_virtual_class<SkinReference>();
 
 	ClassDB::register_virtual_class<IKConstraint>();
+	ClassDB::register_class<IKLimitAxial>();
 	ClassDB::register_class<IKLimitCone>();
 	ClassDB::register_class<IKConstraintKusudama>();
 	ClassDB::register_class<SkeletonIKConstraints>();

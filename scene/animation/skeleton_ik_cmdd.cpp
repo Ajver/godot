@@ -167,8 +167,8 @@ void IKConstraintKusudama::optimize_limiting_axes() {
 }
 
 void IKConstraintKusudama::set_axial_limits(float p_min_angle, float p_in_range) {
-	minAxialAngle = p_min_angle;
-	range = to_tau(p_in_range);
+	axial_limit->set_min_axial_angle(p_min_angle);
+    axial_limit->set_range(p_in_range);
 	constraint_update_notification();
 }
 
@@ -184,7 +184,8 @@ void IKConstraintKusudama::add_limit_cone_at_index(int p_insert_at, Vector3 p_ne
 	update_rotational_freedom();
 }
 
-Ref<IKLimitCone> IKConstraintKusudama::create_limit_cone_for_index(int p_insert_at, Vector3 p_new_point, float p_radius) {
+Ref<IKLimitCone>
+IKConstraintKusudama::create_limit_cone_for_index(int p_insert_at, Vector3 p_new_point, float p_radius) {
 	ERR_FAIL_INDEX_V(p_insert_at, limit_cones.size(), NULL);
 	Ref<IKLimitCone> limit_cone;
 	limit_cone.instance();
@@ -278,8 +279,9 @@ bool CMDDInverseKinematic::build_chain(Task *p_task, bool p_force_simple_chain) 
 		for (int32_t count_i = 0; count_i < sub_chain_size; count_i++) {
 			StringName bone_name = p_task->skeleton->get_bone_name(chain_ids[count_i]);
 			chain.constraints->set_chain_item(count_i, bone_name);
-			Ref<IKConstraintKusudama> constraint = chain.constraints->get_constraint(count_i);
-			chain.constraints->set_constraint(count_i, constraint);
+			Ref<IKConstraintKusudama> constraint;
+			constraint.instance()
+;			chain.constraints->set_constraint(count_i, constraint);
 		}
 		chain.constraints->_change_notify();
 	}
@@ -676,6 +678,30 @@ void SkeletonIKCMDD::_validate_property(PropertyInfo &property) const {
 			property.hint_string = "";
 		}
 	}
+}
+
+void IKLimitAxial::set_min_axial_angle(real_t p_min_axial_angle) {
+    min_axial_angle = p_min_axial_angle;
+}
+
+real_t IKLimitAxial::get_min_axial_angle() const {
+    return min_axial_angle;
+}
+void IKLimitAxial::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("set_min_angle_degree", "angle"), &IKLimitAxial::set_min_axial_angle_degree);
+    ClassDB::bind_method(D_METHOD("get_min_angle_degree"), &IKLimitAxial::get_min_axial_angle_degree);
+    ClassDB::bind_method(D_METHOD("set_range_degree", "range"), &IKLimitAxial::set_range_degree);
+    ClassDB::bind_method(D_METHOD("get_range_degree"), &IKLimitAxial::get_range_degree);
+    ADD_PROPERTY(PropertyInfo(Variant::REAL, "min_angle_degree"), "set_min_angle_degree", "get_min_angle_degree");
+    ADD_PROPERTY(PropertyInfo(Variant::REAL, "range_degree"), "set_range_degree", "get_range_degree");
+}
+
+real_t IKLimitAxial::get_range() const {
+    return range;
+}
+
+void IKLimitAxial::set_range(real_t p_range) {
+    range = p_range;
 }
 
 void SkeletonIKCMDD::_bind_methods() {
@@ -1114,7 +1140,18 @@ real_t IKConstraintKusudama::get_rotational_freedom() const {
 	return rotational_freedom;
 }
 
-real_t IKConstraintKusudama::to_tau(real_t p_angle) {
+real_t IKConstraintKusudama::from_tau(real_t p_tau) const {
+	real_t result = p_tau;
+
+	if (p_tau < 0.0f) {
+		result = 1.0f + p_tau;
+	}
+	result = Math::fmod(result, 1.0f);
+	result = result * Math_PI;
+	return result;
+}
+
+real_t IKConstraintKusudama::to_tau(real_t p_angle) const {
 	real_t result = p_angle;
 	if (p_angle < 0) {
 		result = (2 * Math_PI) + p_angle;
@@ -1145,11 +1182,11 @@ real_t IKConstraintKusudama::snap_to_twist_limits(IKAxes p_to_set, IKAxes p_limi
 	const int32_t axis_y = 1;
 	real_t angleDelta2 = Basis(decomposition[1]).get_axis(axis_y).y * -1.0f;
 	angleDelta2 = to_tau(angleDelta2);
-	real_t fromMinToAngleDelta = to_tau(signed_angle_difference(angleDelta2, Math_TAU - min_axial_angle));
+	real_t fromMinToAngleDelta = to_tau(signed_angle_difference(angleDelta2, axial_limit->get_min_axial_angle()));
 
-	if (fromMinToAngleDelta < Math_TAU - range) {
-		real_t distToMin = Math::absf(signed_angle_difference(angleDelta2, Math_TAU - min_axial_angle));
-		real_t distToMax = Math::absf(signed_angle_difference(angleDelta2, Math_TAU - (min_axial_angle + range)));
+	if (fromMinToAngleDelta < Math_TAU - to_tau(axial_limit->get_range())) {
+		real_t distToMin = Math::absf(signed_angle_difference(angleDelta2, axial_limit->get_min_axial_angle()));
+		real_t distToMax = Math::absf(signed_angle_difference(angleDelta2, Math_TAU - (to_tau(axial_limit->get_min_axial_angle()) + to_tau(axial_limit->get_range()))));
 		real_t turnDiff = 1.0f;
 		turnDiff *= p_limiting_axes.get_global_chirality();
 		if (distToMin < distToMax) {
@@ -1157,7 +1194,7 @@ real_t IKConstraintKusudama::snap_to_twist_limits(IKAxes p_to_set, IKAxes p_limi
 			p_to_set.rotate_basis(Vector3(0, 1, 0), turnDiff);
 			p_to_set.orthonormalize();
 		} else {
-			turnDiff = turnDiff * (range - (Math_TAU - fromMinToAngleDelta));
+			turnDiff = turnDiff * (to_tau(axial_limit->get_range()) - (Math_TAU - fromMinToAngleDelta));
 			p_to_set.rotate_basis(Vector3(0, 1, 0), turnDiff);
 			p_to_set.orthonormalize();
 		}
@@ -1173,6 +1210,9 @@ void IKConstraintKusudama::update_tangent_radii() {
 		Ref<IKLimitCone> next;
 		if (cone_i < limit_cones.size() - 1) {
 			next = limit_cones[cone_i + 1];
+		}
+		if (next.is_null()) {
+			continue;
 		}
 		limit_cones.write[cone_i]->update_tangent_handles(next);
 	}
@@ -1522,7 +1562,7 @@ void SkeletonIKConstraints::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_bone_names", "bone_names"), &SkeletonIKConstraints::set_bone_names);
 	ClassDB::bind_method(D_METHOD("get_bone_names"), &SkeletonIKConstraints::get_bone_names);
 
-	ADD_PROPERTY(PropertyInfo(Variant::POOL_STRING_ARRAY, "bone_names"), "set_bone_names", "get_bone_names");
+	ADD_PROPERTY(PropertyInfo(Variant::POOL_STRING_ARRAY, "bone_names", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_INTERNAL), "set_bone_names", "get_bone_names");
 }
 
 void SkeletonIKConstraints::_get_property_list(List<PropertyInfo> *p_list) const {
@@ -1691,7 +1731,9 @@ real_t IKConstraintKusudama::angle_to_twist_center(IKAxes p_global_xform, IKAxes
 	const int32_t axis_y = 1;
 	real_t angle_delta_2 = Basis(decomposition[1]).get_axis(axis_y).y * -1.0f;
 	angle_delta_2 = to_tau(angle_delta_2);
-	real_t dist_to_mid = signed_angle_difference(angle_delta_2, Math_TAU - (min_axial_angle + (range / 2.0f)));
+	real_t dist_to_mid = signed_angle_difference(angle_delta_2,
+	        Math_TAU - (to_tau(axial_limit->get_min_axial_angle())
+	        + (to_tau((axial_limit->get_range()) / 2.0f))));
 	return dist_to_mid;
 }
 
@@ -1736,7 +1778,7 @@ bool IKConstraintKusudama::is_in_limits_(const Vector3 p_global_point) const {
 }
 
 void IKConstraintKusudama::update_rotational_freedom() {
-	float axialConstrainedHyperArea = axial_constrained ? (range / Math_TAU) : 1.0f;
+	float axialConstrainedHyperArea = axial_constrained ? ( to_tau(axial_limit->get_range()) / Math_TAU) : 1.0f;
 	// quick and dirty solution (should revisit);
 	float totalLimitConeSurfaceAreaRatio = 0.0f;
 	for (int32_t limit_cone_i = 0; limit_cone_i < limit_cones.size(); limit_cone_i++) {
@@ -1985,7 +2027,7 @@ bool IKConstraintKusudama::_set(const StringName &p_name, const Variant &p_value
 			for (int32_t limit_cone_i = initial_size; limit_cone_i < new_size; limit_cone_i++) {
 				Ref<IKLimitCone> limit_cone;
 				limit_cone.instance();
-                limit_cone->initialize(Vector3(), 0.0f, this);
+				limit_cone->initialize(Vector3(), 0.0f, this);
 				limit_cones.write[limit_cone_i] = limit_cone;
 			}
 		}
@@ -2031,12 +2073,28 @@ bool IKConstraintKusudama::_get(const StringName &p_name, Variant &r_ret) const 
 }
 
 void IKConstraintKusudama::_get_property_list(List<PropertyInfo> *p_list) const {
-	p_list->push_back(PropertyInfo(Variant::INT, "limit_cone_count", PROPERTY_HINT_RANGE, "0,16384,1,or_greater"));
+    p_list->push_back(PropertyInfo(Variant::INT, "limit_cone_count", PROPERTY_HINT_RANGE, "0,16384,1,or_greater"));
 	for (int i = 0; i < limit_cones.size(); i++) {
 		p_list->push_back(PropertyInfo(Variant::VECTOR3, "limit_cones/" + itos(i) + "/control_point"));
 		p_list->push_back(
 				PropertyInfo(Variant::REAL, "limit_cones/" + itos(i) + "/radius"));
 	}
+}
+
+void IKConstraintKusudama::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("set_axial_limit", "axial_limit"), &IKConstraintKusudama::set_axial_limit);
+    ClassDB::bind_method(D_METHOD("get_axial_limit"), &IKConstraintKusudama::get_axial_limit);
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "limit_axial", PROPERTY_HINT_RESOURCE_TYPE, "IKLimitAxial"), "set_axial_limit", "get_axial_limit");
+}
+
+Ref<IKLimitAxial> IKConstraintKusudama::get_axial_limit() const {
+    return axial_limit;
+}
+
+void IKConstraintKusudama::set_axial_limit(Ref<IKLimitAxial> p_axial_limit) {
+    set_axial_limits(axial_limit->get_min_axial_angle(), from_tau(axial_limit->get_range()));
+    _change_notify();
+    emit_changed();
 }
 
 void CMDDInverseKinematic::ChainTarget::set_parent_pin(CMDDInverseKinematic::ChainTarget *parent) {
