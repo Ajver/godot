@@ -121,15 +121,15 @@ void IKConstraintKusudama::optimize_limiting_axes() {
 	const IKAxes original_limiting_axes = limiting_axes;
 
 	Vector<Vector3> directions;
-	if (limit_cones.size() == 1) {
-		Ref<IKLimitCone> limit_cone = limit_cones[0];
-		directions.push_back(directions.write[0] + limit_cone->get_control_point().normalized());
+	if (direction_limits.size() == 1) {
+		Ref<IKDirectionLimit> direction_limit = direction_limits[0];
+		directions.push_back(directions.write[0] + direction_limit->get_center().normalized());
 	} else {
-		for (int cone_i = 0; cone_i < limit_cones.size() - 1; cone_i++) {
-			Ref<IKLimitCone> limit_cone_0 = limit_cones[cone_i];
-			Vector3 this_c = limit_cone_0->get_control_point().normalized();
-			Ref<IKLimitCone> limit_cone_1 = limit_cones[cone_i + 1];
-			Vector3 next_c = limit_cone_1->get_control_point().normalized();
+		for (int limit_i = 0; limit_i < direction_limits.size() - 1; limit_i++) {
+			Ref<IKDirectionLimit> direction_limit_0 = direction_limits[limit_i];
+			Vector3 this_c = direction_limit_0->get_center().normalized();
+			Ref<IKDirectionLimit> direction_limit_1 = direction_limits[limit_i + 1];
+			Vector3 next_c = direction_limit_1->get_center().normalized();
 			Quat this_to_next = Quat(this_c, next_c);
 			Vector3 axis;
 			real_t angle;
@@ -160,44 +160,44 @@ void IKConstraintKusudama::optimize_limiting_axes() {
 	Ray newYRay = Ray(Vector3(0.0, 0.0, 0.0), newY);
 
 	//TODO
-	//    Quat oldYtoNewY = Quat(limiting_axes.y_().heading(), original_limiting_axes.getGlobalOf(newYRay).heading());
-	//    limiting_axes.rotate(oldYtoNewY);
-	//
-	//    for (int32_t limit_cone_i =0 ;limit_cone_i<limit_cones.size(); limit_cone_i++) {
-	//        IKLimitCone lc = limit_cones[limit_cone_i];
-	//        original_limiting_axes.setToGlobalOf(lc.get_control_point(), lc.get_control_point().normalized());
-	//        limiting_axes.setToLocalOf(lc.get_control_point(), lc.get_control_point().normalized());
-	//        lc.get_control_point().normalize();
-	//    }
+//	    Quat oldYtoNewY = Quat(limiting_axes.y_().heading(), original_limiting_axes.getGlobalOf(newYRay).heading());
+//	    limiting_axes.rotate(oldYtoNewY);
+//
+//	    for (int32_t direction_limit_i =0 ; direction_limit_i < direction_limits.size(); direction_limit_i++) {
+//	        Ref<IKDirectionLimit> direction_limit = direction_limits[direction_limit_i];
+//	        original_limiting_axes.setToGlobalOf(direction_limit->get_center(), direction_limit->get_center().normalized());
+//	        limiting_axes.setToLocalOf(direction_limit->get_center(), direction_limit->get_center().normalized());
+//	        direction_limit->get_center().normalize();
+//	    }
 	update_tangent_radii();
 }
 
 void IKConstraintKusudama::set_axial_limits(float p_min_angle, float p_in_range) {
-	axial_limit->set_min_axial_angle(p_min_angle);
+    axial_limit->set_min_twist_angle(p_min_angle);
 	axial_limit->set_range(p_in_range);
 	constraint_update_notification();
 }
 
-void IKConstraintKusudama::add_limit_cone_at_index(int p_insert_at, Vector3 p_new_point, float p_radius) {
-	Ref<IKLimitCone> new_cone = create_limit_cone_for_index(p_insert_at, p_new_point, p_radius);
-	ERR_FAIL_COND(new_cone.is_null());
+void IKConstraintKusudama::add_direction_limit_at_index(int p_insert_at, Vector3 p_new_point, float p_radius) {
+	Ref<IKDirectionLimit> new_direction_limit = create_direction_limit_for_index(p_insert_at, p_new_point, p_radius);
+	ERR_FAIL_COND(new_direction_limit.is_null());
 	if (p_insert_at == -1) {
-		limit_cones.push_back(new_cone);
+		direction_limits.push_back(new_direction_limit);
 	} else {
-		limit_cones.insert(p_insert_at, new_cone);
+		direction_limits.insert(p_insert_at, new_direction_limit);
 	}
 	update_tangent_radii();
 	update_rotational_freedom();
 }
 
-Ref<IKLimitCone>
-IKConstraintKusudama::create_limit_cone_for_index(int p_insert_at, Vector3 p_new_point, float p_radius) {
-	ERR_FAIL_INDEX_V(p_insert_at, limit_cones.size(), NULL);
-	Ref<IKLimitCone> limit_cone;
-	limit_cone.instance();
-	limit_cone->initialize(p_new_point, p_radius, this);
-	limit_cones[p_insert_at] = limit_cone;
-	return limit_cone;
+Ref<IKDirectionLimit>
+IKConstraintKusudama::create_direction_limit_for_index(int p_insert_at, Vector3 p_new_point, float p_radius) {
+	ERR_FAIL_INDEX_V(p_insert_at, direction_limits.size(), NULL);
+	Ref<IKDirectionLimit> direction_limit;
+	direction_limit.instance();
+	direction_limit->initialize(p_new_point, p_radius, this);
+    direction_limits[p_insert_at] = direction_limit;
+	return direction_limit;
 }
 
 /// Build a chain that starts from the root to tip
@@ -689,27 +689,27 @@ void SkeletonIKCMDD::_validate_property(PropertyInfo &property) const {
 	}
 }
 
-void IKLimitAxial::set_min_axial_angle(real_t p_min_axial_angle) {
-	min_axial_angle = p_min_axial_angle;
+void IKTwistLimit::set_min_twist_angle(real_t p_min_axial_angle) {
+    min_twist_angle = p_min_axial_angle;
 }
 
-real_t IKLimitAxial::get_min_axial_angle() const {
-	return min_axial_angle;
+real_t IKTwistLimit::get_min_twist_angle() const {
+	return min_twist_angle;
 }
-void IKLimitAxial::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("set_min_angle_degree", "angle"), &IKLimitAxial::set_min_axial_angle_degree);
-	ClassDB::bind_method(D_METHOD("get_min_angle_degree"), &IKLimitAxial::get_min_axial_angle_degree);
-	ClassDB::bind_method(D_METHOD("set_range_degree", "range"), &IKLimitAxial::set_range_degree);
-	ClassDB::bind_method(D_METHOD("get_range_degree"), &IKLimitAxial::get_range_degree);
+void IKTwistLimit::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("set_min_angle_degree", "angle"), &IKTwistLimit::set_min_twist_angle_degree);
+	ClassDB::bind_method(D_METHOD("get_min_angle_degree"), &IKTwistLimit::get_min_twist_angle_degree);
+	ClassDB::bind_method(D_METHOD("set_range_degree", "range"), &IKTwistLimit::set_range_degree);
+	ClassDB::bind_method(D_METHOD("get_range_degree"), &IKTwistLimit::get_range_degree);
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "min_angle_degree"), "set_min_angle_degree", "get_min_angle_degree");
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "range_degree"), "set_range_degree", "get_range_degree");
 }
 
-real_t IKLimitAxial::get_range() const {
+real_t IKTwistLimit::get_range() const {
 	return range;
 }
 
-void IKLimitAxial::set_range(real_t p_range) {
+void IKTwistLimit::set_range(real_t p_range) {
 	range = p_range;
 }
 
@@ -907,8 +907,8 @@ Skeleton *SkeletonIKCMDD::get_parent_skeleton() const {
 
 #endif // _3D_DISABLED
 
-void IKLimitCone::initialize(Vector3 p_location, real_t p_rad, Ref<IKConstraintKusudama> p_attached_to) {
-	set_control_point(p_location);
+void IKDirectionLimit::initialize(Vector3 p_location, real_t p_rad, Ref<IKConstraintKusudama> p_attached_to) {
+    set_center(p_location);
 	tangent_circle_center_next_1 = get_orthogonal(p_location);
 	tangent_circle_center_next_2 = tangent_circle_center_next_1 * -1.0f;
 
@@ -917,14 +917,14 @@ void IKLimitCone::initialize(Vector3 p_location, real_t p_rad, Ref<IKConstraintK
 	parent_kusudama = p_attached_to;
 }
 
-void IKLimitCone::update_tangent_handles(Ref<IKLimitCone> p_next) {
-	control_point.normalize();
+void IKDirectionLimit::update_tangent_handles(Ref<IKDirectionLimit> p_next) {
+	center_point.normalize();
 
 	real_t radA = get_radius();
 	real_t radB = p_next->get_radius();
 
-	Vector3 A = get_control_point().normalized();
-	Vector3 B = get_control_point().normalized();
+	Vector3 A = get_center().normalized();
+	Vector3 B = get_center().normalized();
 
 	Vector3 arcNormal = A.cross(B);
 	Quat aToARadian = Quat(A, arcNormal);
@@ -1010,7 +1010,7 @@ void IKLimitCone::update_tangent_handles(Ref<IKLimitCone> p_next) {
 	tangent_circle_radius_previous_cos = Math::cos(tangent_circle_radius_previous);
 
 	if (tangent_circle_center_next_1.is_equal_approx(Vector3())) {
-		tangent_circle_center_next_1 = get_orthogonal(control_point).normalized();
+		tangent_circle_center_next_1 = get_orthogonal(center_point).normalized();
 	}
 	if (tangent_circle_center_next_2.is_equal_approx(Vector3())) {
 		tangent_circle_center_next_2 = (tangent_circle_center_next_1 * -1.0f).normalized();
@@ -1018,14 +1018,14 @@ void IKLimitCone::update_tangent_handles(Ref<IKLimitCone> p_next) {
 	compute_triangles(p_next);
 }
 
-void IKLimitCone::set_radius(real_t p_radius) {
+void IKDirectionLimit::set_radius(real_t p_radius) {
 	radius = p_radius;
 	radius_cosine = Math::cos(p_radius);
 	//TODO
 	// parent_kusudama->constraint_update_notification();
 }
 
-Vector3 IKLimitCone::get_orthogonal(Vector3 p_vec) {
+Vector3 IKDirectionLimit::get_orthogonal(Vector3 p_vec) {
 	real_t threshold = p_vec.length() * 0.6f;
 	if (threshold > 0) {
 		if (Math::absf(p_vec.x) <= threshold) {
@@ -1042,94 +1042,94 @@ Vector3 IKLimitCone::get_orthogonal(Vector3 p_vec) {
 	return Vector3();
 }
 
-Vector3 IKLimitCone::get_control_point() const {
-	return control_point;
+Vector3 IKDirectionLimit::get_center() const {
+	return center_point;
 }
 
-real_t IKLimitCone::get_radius_cosine() {
+real_t IKDirectionLimit::get_radius_cosine() {
 	return radius_cosine;
 }
 
-real_t IKLimitCone::get_radius() const {
+real_t IKDirectionLimit::get_radius() const {
 	return radius;
 }
 
-Vector3 IKLimitCone::get_closest_path_point(Ref<IKLimitCone> p_next, Vector3 p_input) const {
+Vector3 IKDirectionLimit::get_closest_path_point(Ref<IKDirectionLimit> p_next, Vector3 p_input) const {
 	Vector3 result = get_on_path_sequence(p_next, p_input);
 	if (result.is_equal_approx(Vector3())) {
-		result = closest_cone(p_next, p_input);
+		result = closest_directional_limit(p_next, p_input);
 	}
 	return result;
 }
 
-Vector3 IKLimitCone::closest_cone(Ref<IKLimitCone> p_next, Vector3 p_input) const {
-	if (p_input.dot(control_point) > p_input.dot(p_next->control_point))
-		return control_point;
+Vector3 IKDirectionLimit::closest_directional_limit(Ref<IKDirectionLimit> p_next, Vector3 p_input) const {
+	if (p_input.dot(center_point) > p_input.dot(p_next->center_point))
+		return center_point;
 	else
-		return p_next->control_point;
+		return p_next->center_point;
 }
 
-Vector3 IKLimitCone::get_on_path_sequence(Ref<IKLimitCone> p_next, Vector3 p_input) const {
-	Vector3 c1xc2 = control_point.cross(p_next->control_point);
+Vector3 IKDirectionLimit::get_on_path_sequence(Ref<IKDirectionLimit> p_next, Vector3 p_input) const {
+	Vector3 c1xc2 = center_point.cross(p_next->center_point);
 	real_t c1c2fir = p_input.dot(c1xc2);
 	if (c1c2fir < 0.0) {
-		Vector3 c1xt1 = control_point.cross(tangent_circle_center_next_1);
-		Vector3 t1xc2 = tangent_circle_center_next_1.cross(p_next->control_point);
+		Vector3 c1xt1 = center_point.cross(tangent_circle_center_next_1);
+		Vector3 t1xc2 = tangent_circle_center_next_1.cross(p_next->center_point);
 		if (p_input.dot(c1xt1) > 0 && p_input.dot(t1xc2) > 0) {
 			Ray tan1ToInput;
 			tan1ToInput.position = tangent_circle_center_next_1;
 			tan1ToInput.normal = p_input;
 			Vector3 result;
-			Plane plane = Plane(control_point, tan1ToInput.normal);
-			plane.intersects_ray(p_next->control_point, (control_point - p_next->control_point).normalized(), &result);
-			return (result - p_next->control_point).normalized();
+			Plane plane = Plane(center_point, tan1ToInput.normal);
+			plane.intersects_ray(p_next->center_point, (center_point - p_next->center_point).normalized(), &result);
+			return (result - p_next->center_point).normalized();
 		} else {
 			return Vector3();
 		}
 	} else {
-		Vector3 t2xc1 = tangent_circle_center_next_2.cross(control_point);
-		Vector3 c2xt2 = p_next->control_point.cross(tangent_circle_center_next_2);
+		Vector3 t2xc1 = tangent_circle_center_next_2.cross(center_point);
+		Vector3 c2xt2 = p_next->center_point.cross(tangent_circle_center_next_2);
 		if (p_input.dot(t2xc1) > 0 && p_input.dot(c2xt2) > 0) {
 			Ray tan2ToInput;
 			tan2ToInput.position = tangent_circle_center_next_2;
 			tan2ToInput.normal = p_input;
 			Vector3 result;
 
-			Plane plane = Plane(control_point, tan2ToInput.normal);
-			plane.intersects_ray(p_next->control_point, (control_point - p_next->control_point).normalized(), &result);
-			return (result - p_next->control_point).normalized();
+			Plane plane = Plane(center_point, tan2ToInput.normal);
+			plane.intersects_ray(p_next->center_point, (center_point - p_next->center_point).normalized(), &result);
+			return (result - p_next->center_point).normalized();
 		} else {
 			return Vector3();
 		}
 	}
 }
 
-void IKLimitCone::compute_triangles(Ref<IKLimitCone> p_next) {
+void IKDirectionLimit::compute_triangles(Ref<IKDirectionLimit> p_next) {
 	first_triangle_next.resize(3);
 	first_triangle_next.write[1] = tangent_circle_center_next_1.normalized();
-	first_triangle_next.write[0] = get_control_point().normalized();
-	first_triangle_next.write[2] = p_next->get_control_point().normalized();
+	first_triangle_next.write[0] = get_center().normalized();
+	first_triangle_next.write[2] = p_next->get_center().normalized();
 
 	second_triangle_next.resize(3);
 	second_triangle_next.write[1] = tangent_circle_center_next_2.normalized();
-	second_triangle_next.write[0] = get_control_point().normalized();
-	second_triangle_next.write[2] = get_control_point().normalized();
+	second_triangle_next.write[0] = get_center().normalized();
+	second_triangle_next.write[2] = get_center().normalized();
 }
 
-void IKLimitCone::set_control_point(Vector3 p_control_point) {
-	control_point = p_control_point;
+void IKDirectionLimit::set_center(Vector3 p_control_point) {
+    center_point = p_control_point;
 	if (parent_kusudama.is_valid()) {
 		//	parent_kusudama->constraint_update_notification();
 	}
 }
 
-void IKLimitCone::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("set_radius", "radius"), &IKLimitCone::set_radius);
-	ClassDB::bind_method(D_METHOD("get_radius"), &IKLimitCone::get_radius);
-	ClassDB::bind_method(D_METHOD("set_control_point", "control_point"), &IKLimitCone::set_control_point);
-	ClassDB::bind_method(D_METHOD("get_control_point"), &IKLimitCone::get_control_point);
+void IKDirectionLimit::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("set_radius", "radius"), &IKDirectionLimit::set_radius);
+	ClassDB::bind_method(D_METHOD("get_radius"), &IKDirectionLimit::get_radius);
+	ClassDB::bind_method(D_METHOD("set_center", "center"), &IKDirectionLimit::set_center);
+	ClassDB::bind_method(D_METHOD("get_center"), &IKDirectionLimit::get_center);
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "radius"), "set_radius", "get_radius");
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "control_point"), "set_control_point", "get_control_point");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "center"), "set_center", "get_center");
 }
 
 void IKAxes::operator=(const IKAxes &p_axes) {
@@ -1191,11 +1191,12 @@ real_t IKConstraintKusudama::snap_to_twist_limits(IKAxes p_to_set, IKAxes p_limi
 	const int32_t axis_y = 1;
 	real_t angleDelta2 = Basis(decomposition[1]).get_axis(axis_y).y * -1.0f;
 	angleDelta2 = to_tau(angleDelta2);
-	real_t fromMinToAngleDelta = to_tau(signed_angle_difference(angleDelta2, axial_limit->get_min_axial_angle()));
+	real_t fromMinToAngleDelta = to_tau(signed_angle_difference(angleDelta2, axial_limit->get_min_twist_angle()));
 
 	if (fromMinToAngleDelta < Math_TAU - to_tau(axial_limit->get_range())) {
-		real_t distToMin = Math::absf(signed_angle_difference(angleDelta2, axial_limit->get_min_axial_angle()));
-		real_t distToMax = Math::absf(signed_angle_difference(angleDelta2, Math_TAU - (to_tau(axial_limit->get_min_axial_angle()) + to_tau(axial_limit->get_range()))));
+		real_t distToMin = Math::absf(signed_angle_difference(angleDelta2, axial_limit->get_min_twist_angle()));
+		real_t distToMax = Math::absf(signed_angle_difference(angleDelta2, Math_TAU - (to_tau(
+                axial_limit->get_min_twist_angle()) + to_tau(axial_limit->get_range()))));
 		real_t turnDiff = 1.0f;
 		turnDiff *= p_limiting_axes.get_global_chirality();
 		if (distToMin < distToMax) {
@@ -1215,16 +1216,16 @@ real_t IKConstraintKusudama::snap_to_twist_limits(IKAxes p_to_set, IKAxes p_limi
 }
 
 void IKConstraintKusudama::update_tangent_radii() {
-	for (int cone_i = 0; cone_i < limit_cones.size(); cone_i++) {
-		Ref<IKLimitCone> next;
-		if (cone_i < limit_cones.size() - 1) {
-			next = limit_cones[cone_i + 1];
+	for (int direction_limit_i = 0; direction_limit_i < direction_limits.size(); direction_limit_i++) {
+		Ref<IKDirectionLimit> next;
+		if (direction_limit_i < direction_limits.size() - 1) {
+			next = direction_limits[direction_limit_i + 1];
 		}
 		if (next.is_null()) {
 			continue;
 		}
-		Ref<IKLimitCone> limit_cone = limit_cones[cone_i];
-		limit_cone->update_tangent_handles(next);
+		Ref<IKDirectionLimit> direction_limit = direction_limits[direction_limit_i];
+		direction_limit->update_tangent_handles(next);
 	}
 }
 
@@ -1750,7 +1751,7 @@ real_t IKConstraintKusudama::angle_to_twist_center(IKAxes p_global_xform, IKAxes
 	real_t angle_delta_2 = Basis(decomposition[1]).get_axis(axis_y).y * -1.0f;
 	angle_delta_2 = to_tau(angle_delta_2);
 	real_t dist_to_mid = signed_angle_difference(angle_delta_2,
-			Math_TAU - (to_tau(axial_limit->get_min_axial_angle()) + (to_tau((axial_limit->get_range()) / 2.0f))));
+			Math_TAU - (to_tau(axial_limit->get_min_twist_angle()) + (to_tau((axial_limit->get_range()) / 2.0f))));
 	return dist_to_mid;
 }
 
@@ -1761,14 +1762,14 @@ IKConstraintKusudama::point_on_path_sequence(IKAxes p_global_xform, Vector3 p_in
 	point.normalize();
 	Vector3 result = point;
 
-	if (limit_cones.size() == 1) {
-		Ref<IKLimitCone> limit_cone = limit_cones[0];
-		result = limit_cone->control_point;
+	if (direction_limits.size() == 1) {
+		Ref<IKDirectionLimit> direction_limit = direction_limits[0];
+		result = direction_limit->center_point;
 	} else {
-		for (int cone_i = 0; cone_i < limit_cones.size() - 1; cone_i++) {
-			Ref<IKLimitCone> next_cone = limit_cones[cone_i + 1];
-			Ref<IKLimitCone> limit_cone = limit_cones[cone_i];
-			Vector3 closest_path_point = limit_cone->get_closest_path_point(next_cone, point);
+		for (int direction_limit_i = 0; direction_limit_i < direction_limits.size() - 1; direction_limit_i++) {
+			Ref<IKDirectionLimit> next_direction = direction_limits[direction_limit_i + 1];
+			Ref<IKDirectionLimit> direction = direction_limits[direction_limit_i];
+			Vector3 closest_path_point = direction->get_closest_path_point(next_direction, point);
 			real_t close_dot = closest_path_point.dot(point);
 			if (close_dot > closestPointDot) {
 				result = closest_path_point;
@@ -1799,13 +1800,13 @@ bool IKConstraintKusudama::is_in_limits_(const Vector3 p_global_point) const {
 void IKConstraintKusudama::update_rotational_freedom() {
 	float axialConstrainedHyperArea = axial_constrained ? (to_tau(axial_limit->get_range()) / Math_TAU) : 1.0f;
 	// quick and dirty solution (should revisit);
-	float totalLimitConeSurfaceAreaRatio = 0.0f;
-	for (int32_t limit_cone_i = 0; limit_cone_i < limit_cones.size(); limit_cone_i++) {
-		Ref<IKLimitCone> limit_cone = limit_cones[limit_cone_i];
-		totalLimitConeSurfaceAreaRatio += (limit_cone->get_radius() * 2.0f) / Math_TAU;
+	float total_limit_cone_surface_area_ratio = 0.0f;
+	for (int32_t limit_cone_i = 0; limit_cone_i < direction_limits.size(); limit_cone_i++) {
+		Ref<IKDirectionLimit> direction_limit = direction_limits[limit_cone_i];
+        total_limit_cone_surface_area_ratio += (direction_limit->get_radius() * 2.0f) / Math_TAU;
 	}
 	rotational_freedom = axialConstrainedHyperArea *
-						 (orientation_constrained ? MIN(totalLimitConeSurfaceAreaRatio, 1.0f) : 1.0f);
+						 (orientation_constrained ? MIN(total_limit_cone_surface_area_ratio, 1.0f) : 1.0f);
 }
 
 Vector3 Ray::set_to_inverted_tip(Vector3 p_vec) {
@@ -2039,31 +2040,31 @@ void IKConstraintKusudama::set_pain(real_t p_amount) {
 
 bool IKConstraintKusudama::_set(const StringName &p_name, const Variant &p_value) {
 	String name = p_name;
-	if (name == "limit_cone_count") {
-		int32_t initial_size = limit_cones.size();
+	if (name == "direction_limit_count") {
+		int32_t initial_size = direction_limits.size();
 		int32_t new_size = p_value;
-		limit_cones.resize(p_value);
+		direction_limits.resize(p_value);
 		if (initial_size < new_size) {
-			for (int32_t limit_cone_i = initial_size; limit_cone_i < new_size; limit_cone_i++) {
-				Ref<IKLimitCone> limit_cone;
-				limit_cone.instance();
-				limit_cone->initialize(Vector3(), 0.0f, this);
-				limit_cones[limit_cone_i] = limit_cone;
+			for (int32_t direction_limit_i = initial_size; direction_limit_i < new_size; direction_limit_i++) {
+				Ref<IKDirectionLimit> direction_limit;
+				direction_limit.instance();
+				direction_limit->initialize(Vector3(), 0.0f, this);
+                direction_limits[direction_limit_i] = direction_limit;
 			}
 		}
 		_change_notify();
 		emit_changed();
 		return true;
-	} else if (name.begins_with("limit_cones/")) {
+	} else if (name.begins_with("direction_limits/")) {
 		int index = name.get_slicec('/', 1).to_int();
 		String what = name.get_slicec('/', 2);
-		if (what == "control_point") {
-			Ref<IKLimitCone> limit_cone = limit_cones[index];
-			limit_cone->set_control_point(p_value);
+		if (what == "center") {
+			Ref<IKDirectionLimit> direction_limit = direction_limits[index];
+            direction_limit->set_center(p_value);
 			return true;
 		} else if (what == "radius") {
-			Ref<IKLimitCone> limit_cone = limit_cones[index];
-			limit_cone->set_radius(p_value);
+			Ref<IKDirectionLimit> direction_limit = direction_limits[index];
+			direction_limit->set_radius(p_value);
 			return true;
 		}
 	}
@@ -2073,19 +2074,19 @@ bool IKConstraintKusudama::_set(const StringName &p_name, const Variant &p_value
 bool IKConstraintKusudama::_get(const StringName &p_name, Variant &r_ret) const {
 
 	String name = p_name;
-	if (name == "limit_cone_count") {
-		r_ret = limit_cones.size();
+	if (name == "direction_limit_count") {
+		r_ret = direction_limits.size();
 		return true;
-	} else if (name.begins_with("limit_cones/")) {
+	} else if (name.begins_with("direction_limits/")) {
 		int index = name.get_slicec('/', 1).to_int();
 		String what = name.get_slicec('/', 2);
-		if (what == "control_point") {
-			Ref<IKLimitCone> limit_cone = limit_cones[index];
-			r_ret = limit_cone->get_control_point();
+		if (what == "center") {
+			Ref<IKDirectionLimit> direction_limit = direction_limits[index];
+			r_ret = direction_limit->get_center();
 			return true;
 		} else if (what == "radius") {
-			Ref<IKLimitCone> limit_cone = limit_cones[index];
-			r_ret = limit_cone->get_radius();
+			Ref<IKDirectionLimit> direction_limit = direction_limits[index];
+			r_ret = direction_limit->get_radius();
 			return true;
 		}
 	}
@@ -2093,26 +2094,26 @@ bool IKConstraintKusudama::_get(const StringName &p_name, Variant &r_ret) const 
 }
 
 void IKConstraintKusudama::_get_property_list(List<PropertyInfo> *p_list) const {
-	p_list->push_back(PropertyInfo(Variant::INT, "limit_cone_count", PROPERTY_HINT_RANGE, "0,16384,1,or_greater"));
-	for (int i = 0; i < limit_cones.size(); i++) {
-		p_list->push_back(PropertyInfo(Variant::VECTOR3, "limit_cones/" + itos(i) + "/control_point"));
+	p_list->push_back(PropertyInfo(Variant::INT, "direction_limit_count", PROPERTY_HINT_RANGE, "0,16384,1,or_greater"));
+	for (int i = 0; i < direction_limits.size(); i++) {
+		p_list->push_back(PropertyInfo(Variant::VECTOR3, "direction_limits/" + itos(i) + "/center"));
 		p_list->push_back(
-				PropertyInfo(Variant::REAL, "limit_cones/" + itos(i) + "/radius"));
+				PropertyInfo(Variant::REAL, "direction_limits/" + itos(i) + "/radius"));
 	}
 }
 
 void IKConstraintKusudama::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("set_axial_limit", "axial_limit"), &IKConstraintKusudama::set_axial_limit);
-	ClassDB::bind_method(D_METHOD("get_axial_limit"), &IKConstraintKusudama::get_axial_limit);
-	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "limit_axial", PROPERTY_HINT_RESOURCE_TYPE, "IKLimitAxial"), "set_axial_limit", "get_axial_limit");
+	ClassDB::bind_method(D_METHOD("set_twist_limit", "axial_limit"), &IKConstraintKusudama::set_twist_limit);
+	ClassDB::bind_method(D_METHOD("get_twist_limit"), &IKConstraintKusudama::get_twist_limit);
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "twist_limit", PROPERTY_HINT_RESOURCE_TYPE, "IKTwistLimit"), "set_twist_limit", "get_twist_limit");
 }
 
-Ref<IKLimitAxial> IKConstraintKusudama::get_axial_limit() const {
+Ref<IKTwistLimit> IKConstraintKusudama::get_twist_limit() const {
 	return axial_limit;
 }
 
-void IKConstraintKusudama::set_axial_limit(Ref<IKLimitAxial> p_axial_limit) {
-	set_axial_limits(axial_limit->get_min_axial_angle(), from_tau(axial_limit->get_range()));
+void IKConstraintKusudama::set_twist_limit(Ref<IKTwistLimit> p_axial_limit) {
+	set_axial_limits(axial_limit->get_min_twist_angle(), from_tau(axial_limit->get_range()));
 	_change_notify();
 	emit_changed();
 }

@@ -115,12 +115,12 @@ public:
 
 class IKConstraintKusudama;
 
-class IKLimitCone : public Resource {
-	GDCLASS(IKLimitCone, Resource);
+class IKDirectionLimit : public Resource {
+	GDCLASS(IKDirectionLimit, Resource);
 	/**
      * a triangle where the [1] is th tangentCircleNext_n, and [0] and [2]
-     * are the points at which the tangent circle intersects this limitCone and the
-     * next limitCone
+     * are the points at which the tangent circle intersects this directional limit and the
+     * next directional limit
      */
 	Vector<Vector3> first_triangle_next;
 	Vector<Vector3> second_triangle_next;
@@ -138,36 +138,36 @@ class IKLimitCone : public Resource {
 	real_t tangent_circle_radius_previous = 0.0f;
 	real_t tangent_circle_radius_previous_cos = 0.0f;
 
-	void compute_triangles(Ref<IKLimitCone> p_next);
+	void compute_triangles(Ref<IKDirectionLimit> p_next);
 
 protected:
 	static void _bind_methods();
 
 public:
-	~IKLimitCone() {
+	~IKDirectionLimit() {
 	}
-	Vector3 control_point;
+	Vector3 center_point;
 	Vector3 radial_point;
 
-	Vector3 get_on_path_sequence(Ref<IKLimitCone> p_next, Vector3 p_input) const;
+	Vector3 get_on_path_sequence(Ref<IKDirectionLimit> p_next, Vector3 p_input) const;
 
-	Vector3 closest_cone(Ref<IKLimitCone> p_next, Vector3 p_input) const;
+	Vector3 closest_directional_limit(Ref<IKDirectionLimit> p_next, Vector3 p_input) const;
 
-	Vector3 get_closest_path_point(Ref<IKLimitCone> p_next, Vector3 p_input) const;
+	Vector3 get_closest_path_point(Ref<IKDirectionLimit> p_next, Vector3 p_input) const;
 
 	real_t get_radius() const;
 
 	real_t get_radius_cosine();
 
-	Vector3 get_control_point() const;
+	Vector3 get_center() const;
 
 	Vector3 get_orthogonal(Vector3 p_vec);
 
-	IKLimitCone() {}
+	IKDirectionLimit() {}
 
-	void set_control_point(Vector3 p_control_point);
+	void set_center(Vector3 p_control_point);
 
-	void update_tangent_handles(Ref<IKLimitCone> p_next);
+	void update_tangent_handles(Ref<IKDirectionLimit> p_next);
 
 	void initialize(Vector3 p_location, real_t p_rad, Ref<IKConstraintKusudama> p_attached_to);
 
@@ -870,16 +870,16 @@ public:
 			const Vector3 &p_magnet_position);
 };
 
-class IKLimitAxial : public Resource {
-	GDCLASS(IKLimitAxial, Resource);
+class IKTwistLimit : public Resource {
+	GDCLASS(IKTwistLimit, Resource);
 	/**
      * Defined as some Angle in radians about the limitingAxes Y axis, 0 being equivalent to the
      * limitingAxes Z axis.
      */
-	real_t min_axial_angle = Math_PI;
+	real_t min_twist_angle = Math_PI;
 	/**
      * Defined as some Angle in radians about the limitingAxes Y axis, 0 being equivalent to the
-     * minAxialAngle
+     * minimum twist angle
      */
 	real_t range = Math::deg2rad(540.0f);
 
@@ -887,15 +887,15 @@ protected:
 	static void _bind_methods();
 
 public:
-	real_t get_min_axial_angle() const;
-	void set_min_axial_angle(real_t p_min_axial_angle);
+	real_t get_min_twist_angle() const;
+	void set_min_twist_angle(real_t p_min_axial_angle);
 	real_t get_range() const;
 	void set_range(real_t p_range);
-	real_t get_min_axial_angle_degree() const {
-		return Math::deg2rad(get_min_axial_angle());
+	real_t get_min_twist_angle_degree() const {
+		return Math::deg2rad(get_min_twist_angle());
 	}
-	void set_min_axial_angle_degree(real_t p_min_axial_angle) {
-		set_min_axial_angle(Math::rad2deg(p_min_axial_angle));
+	void set_min_twist_angle_degree(real_t p_min_axial_angle) {
+        set_min_twist_angle(Math::rad2deg(p_min_axial_angle));
 	}
 	real_t get_range_degree() const {
 		return Math::rad2deg(get_range());
@@ -903,8 +903,8 @@ public:
 	void set_range_degree(real_t p_range) {
 		set_range(Math::deg2rad(p_range));
 	}
-	IKLimitAxial() {}
-	~IKLimitAxial() {}
+	IKTwistLimit() {}
+	~IKTwistLimit() {}
 };
 
 class IKConstraintKusudama : public IKConstraint {
@@ -912,11 +912,11 @@ class IKConstraintKusudama : public IKConstraint {
 
 private:
 	/**
-     * An array containing all of the Kusudama's limitCones. The kusudama is built up
-     * with the expectation that any limitCone in the array is connected to the cone at the previous element in the array,
-     * and the cone at the next element in the array.
+     * An array containing all of the Kusudama's directional limits. The kusudama is built up
+     * with the expectation that any directional limit in the array is connected to the directional limit at the previous element in the array,
+     * and the directional limit at the next element in the array.
      */
-	Array limit_cones;
+	Array direction_limits;
 
 	bool orientation_constrained = false;
 	bool axial_constrained = false;
@@ -927,7 +927,7 @@ private:
 
 protected:
 	static void _bind_methods();
-	Ref<IKLimitAxial> axial_limit;
+	Ref<IKTwistLimit> axial_limit;
 	real_t pain = 0.0f;
 	real_t rotational_freedom = 1.0f;
 
@@ -960,9 +960,9 @@ public:
 		enable();
 	}
 
-	virtual Ref<IKLimitAxial> get_axial_limit() const;
+	virtual Ref<IKTwistLimit> get_twist_limit() const;
 
-	virtual void set_axial_limit(Ref<IKLimitAxial> p_axial_limit);
+	virtual void set_twist_limit(Ref<IKTwistLimit> p_axial_limit);
 
 	virtual void snap_to_limits() {}
 
@@ -1033,36 +1033,36 @@ public:
 	virtual void constraint_update_notification();
 
 	/**
-     * This function should be called after you've set all of the Limiting Cones
+     * This function should be called after you've set all of the directional limits
      * for this Kusudama. It will orient the axes relative to which constrained rotations are computed
      * so as to minimize the potential for undesirable twist rotations due to antipodal singularities.
      *
      * In general, auto-optimization attempts to point the y-component of the constraint
-     * axes in the direction that places it within an oreintation allowed by the constraint,
+     * axes in the direction that places it within an orientation allowed by the constraint,
      * and roughly as far as possible from any orientations not allowed by the constraint.
      */
 	virtual void optimize_limiting_axes();
 
 	virtual void update_tangent_radii();
 
-	virtual Ref<IKLimitCone> create_limit_cone_for_index(int p_insert_at, Vector3 p_new_point, float p_radius);
+	virtual Ref<IKDirectionLimit> create_direction_limit_for_index(int p_insert_at, Vector3 p_new_point, float p_radius);
 
 	/**
-     * Adds a LimitCone to the Kusudama. LimitCones are reach cones which can be arranged sequentially. The Kusudama will infer
-     * a smooth path leading from one LimitCone to the next.
+     * Adds a direction limit to the Kusudama. Directional limits are reach cones which can be arranged sequentially. The Kusudama will infer
+     * a smooth path leading from one direction limit to the next.
      *
-     * Using a single LimitCone is functionally equivalent to a classic reachCone constraint.
+     * Using a single direction limit is functionally equivalent to a classic reach cone constraint.
      *
-     * @param p_insert_at the intended index for this LimitCone in the sequence of LimitCones from which the Kusudama will infer a path. @see IK.AbstractKusudama.limitCones limitCones array.
-     * @param p_new_point where on the Kusudama to add the LimitCone (in Kusudama's local coordinate frame defined by its bone's majorRotationAxes))
-     * @param p_radius the radius of the limitCone
+     * @param p_insert_at the intended index for this directional limits in the sequence of direction limits from which the Kusudama will infer a path.
+     * @param p_new_point where on the Kusudama to add the directional limit (in Kusudama's local coordinate frame defined by its bone's majorRotationAxes))
+     * @param p_radius the radius of the directional limit
      */
-	void add_limit_cone_at_index(int p_insert_at, Vector3 p_new_point, float p_radius);
+	void add_direction_limit_at_index(int p_insert_at, Vector3 p_new_point, float p_radius);
 
 	/**
      * Kusudama constraints decompose the bone orientation into a swing component, and a twist component.
      * The "Swing" component is the final direction of the bone. The "Twist" component represents how much
-     * the bone is rotated about its own final direction. Where limit cones allow you to constrain the "Swing"
+     * the bone is rotated about its own final direction. Where directional limits allow you to constrain the "Swing"
      * component, this method lets you constrain the "twist" component.
      *
      * @param p_min_angle some angle in radians about the major rotation frame's y-axis to serve as the first angle within the range that the bone is allowed to twist.
