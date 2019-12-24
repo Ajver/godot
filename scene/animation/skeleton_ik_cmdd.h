@@ -146,7 +146,7 @@ protected:
 public:
 	~IKDirectionLimit() {
 	}
-	Vector3 center_point;
+	Vector3 control_point;
 	Vector3 radial_point;
 
 	Vector3 get_on_path_sequence(Ref<IKDirectionLimit> p_next, Vector3 p_input) const;
@@ -159,13 +159,13 @@ public:
 
 	real_t get_radius_cosine();
 
-	Vector3 get_center() const;
+	Vector3 get_control_point() const;
 
 	Vector3 get_orthogonal(Vector3 p_vec);
 
 	IKDirectionLimit() {}
 
-	void set_center(Vector3 p_control_point);
+	void set_control_point(Vector3 p_control_point);
 
 	void update_tangent_handles(Ref<IKDirectionLimit> p_next);
 

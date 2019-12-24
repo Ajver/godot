@@ -123,13 +123,13 @@ void IKConstraintKusudama::optimize_limiting_axes() {
 	Vector<Vector3> directions;
 	if (direction_limits.size() == 1) {
 		Ref<IKDirectionLimit> direction_limit = direction_limits[0];
-		directions.push_back(directions.write[0] + direction_limit->get_center().normalized());
+		directions.push_back(directions.write[0] + direction_limit->get_control_point().normalized());
 	} else {
 		for (int limit_i = 0; limit_i < direction_limits.size() - 1; limit_i++) {
 			Ref<IKDirectionLimit> direction_limit_0 = direction_limits[limit_i];
-			Vector3 this_c = direction_limit_0->get_center().normalized();
+			Vector3 this_c = direction_limit_0->get_control_point().normalized();
 			Ref<IKDirectionLimit> direction_limit_1 = direction_limits[limit_i + 1];
-			Vector3 next_c = direction_limit_1->get_center().normalized();
+			Vector3 next_c = direction_limit_1->get_control_point().normalized();
 			Quat this_to_next = Quat(this_c, next_c);
 			Vector3 axis;
 			real_t angle;
@@ -165,9 +165,9 @@ void IKConstraintKusudama::optimize_limiting_axes() {
 //
 //	    for (int32_t direction_limit_i =0 ; direction_limit_i < direction_limits.size(); direction_limit_i++) {
 //	        Ref<IKDirectionLimit> direction_limit = direction_limits[direction_limit_i];
-//	        original_limiting_axes.setToGlobalOf(direction_limit->get_center(), direction_limit->get_center().normalized());
-//	        limiting_axes.setToLocalOf(direction_limit->get_center(), direction_limit->get_center().normalized());
-//	        direction_limit->get_center().normalize();
+//	        original_limiting_axes.setToGlobalOf(direction_limit->get_center(), direction_limit->get_control_point().normalized());
+//	        limiting_axes.setToLocalOf(direction_limit->get_center(), direction_limit->get_control_point().normalized());
+//	        direction_limit->get_control_point().normalize();
 //	    }
 	update_tangent_radii();
 }
@@ -908,7 +908,7 @@ Skeleton *SkeletonIKCMDD::get_parent_skeleton() const {
 #endif // _3D_DISABLED
 
 void IKDirectionLimit::initialize(Vector3 p_location, real_t p_rad, Ref<IKConstraintKusudama> p_attached_to) {
-    set_center(p_location);
+    set_control_point(p_location);
 	tangent_circle_center_next_1 = get_orthogonal(p_location);
 	tangent_circle_center_next_2 = tangent_circle_center_next_1 * -1.0f;
 
@@ -918,13 +918,13 @@ void IKDirectionLimit::initialize(Vector3 p_location, real_t p_rad, Ref<IKConstr
 }
 
 void IKDirectionLimit::update_tangent_handles(Ref<IKDirectionLimit> p_next) {
-	center_point.normalize();
+	control_point.normalize();
 
 	real_t radA = get_radius();
 	real_t radB = p_next->get_radius();
 
-	Vector3 A = get_center().normalized();
-	Vector3 B = get_center().normalized();
+	Vector3 A = get_control_point().normalized();
+	Vector3 B = get_control_point().normalized();
 
 	Vector3 arcNormal = A.cross(B);
 	Quat aToARadian = Quat(A, arcNormal);
@@ -1010,7 +1010,7 @@ void IKDirectionLimit::update_tangent_handles(Ref<IKDirectionLimit> p_next) {
 	tangent_circle_radius_previous_cos = Math::cos(tangent_circle_radius_previous);
 
 	if (tangent_circle_center_next_1.is_equal_approx(Vector3())) {
-		tangent_circle_center_next_1 = get_orthogonal(center_point).normalized();
+		tangent_circle_center_next_1 = get_orthogonal(control_point).normalized();
 	}
 	if (tangent_circle_center_next_2.is_equal_approx(Vector3())) {
 		tangent_circle_center_next_2 = (tangent_circle_center_next_1 * -1.0f).normalized();
@@ -1042,8 +1042,8 @@ Vector3 IKDirectionLimit::get_orthogonal(Vector3 p_vec) {
 	return Vector3();
 }
 
-Vector3 IKDirectionLimit::get_center() const {
-	return center_point;
+Vector3 IKDirectionLimit::get_control_point() const {
+	return control_point;
 }
 
 real_t IKDirectionLimit::get_radius_cosine() {
@@ -1063,41 +1063,41 @@ Vector3 IKDirectionLimit::get_closest_path_point(Ref<IKDirectionLimit> p_next, V
 }
 
 Vector3 IKDirectionLimit::closest_directional_limit(Ref<IKDirectionLimit> p_next, Vector3 p_input) const {
-	if (p_input.dot(center_point) > p_input.dot(p_next->center_point))
-		return center_point;
+	if (p_input.dot(control_point) > p_input.dot(p_next->control_point))
+		return control_point;
 	else
-		return p_next->center_point;
+		return p_next->control_point;
 }
 
 Vector3 IKDirectionLimit::get_on_path_sequence(Ref<IKDirectionLimit> p_next, Vector3 p_input) const {
-	Vector3 c1xc2 = center_point.cross(p_next->center_point);
+	Vector3 c1xc2 = control_point.cross(p_next->control_point);
 	real_t c1c2fir = p_input.dot(c1xc2);
 	if (c1c2fir < 0.0) {
-		Vector3 c1xt1 = center_point.cross(tangent_circle_center_next_1);
-		Vector3 t1xc2 = tangent_circle_center_next_1.cross(p_next->center_point);
+		Vector3 c1xt1 = control_point.cross(tangent_circle_center_next_1);
+		Vector3 t1xc2 = tangent_circle_center_next_1.cross(p_next->control_point);
 		if (p_input.dot(c1xt1) > 0 && p_input.dot(t1xc2) > 0) {
 			Ray tan1ToInput;
 			tan1ToInput.position = tangent_circle_center_next_1;
 			tan1ToInput.normal = p_input;
 			Vector3 result;
-			Plane plane = Plane(center_point, tan1ToInput.normal);
-			plane.intersects_ray(p_next->center_point, (center_point - p_next->center_point).normalized(), &result);
-			return (result - p_next->center_point).normalized();
+			Plane plane = Plane(control_point, tan1ToInput.normal);
+			plane.intersects_ray(p_next->control_point, (control_point - p_next->control_point).normalized(), &result);
+			return (result - p_next->control_point).normalized();
 		} else {
 			return Vector3();
 		}
 	} else {
-		Vector3 t2xc1 = tangent_circle_center_next_2.cross(center_point);
-		Vector3 c2xt2 = p_next->center_point.cross(tangent_circle_center_next_2);
+		Vector3 t2xc1 = tangent_circle_center_next_2.cross(control_point);
+		Vector3 c2xt2 = p_next->control_point.cross(tangent_circle_center_next_2);
 		if (p_input.dot(t2xc1) > 0 && p_input.dot(c2xt2) > 0) {
 			Ray tan2ToInput;
 			tan2ToInput.position = tangent_circle_center_next_2;
 			tan2ToInput.normal = p_input;
 			Vector3 result;
 
-			Plane plane = Plane(center_point, tan2ToInput.normal);
-			plane.intersects_ray(p_next->center_point, (center_point - p_next->center_point).normalized(), &result);
-			return (result - p_next->center_point).normalized();
+			Plane plane = Plane(control_point, tan2ToInput.normal);
+			plane.intersects_ray(p_next->control_point, (control_point - p_next->control_point).normalized(), &result);
+			return (result - p_next->control_point).normalized();
 		} else {
 			return Vector3();
 		}
@@ -1107,17 +1107,17 @@ Vector3 IKDirectionLimit::get_on_path_sequence(Ref<IKDirectionLimit> p_next, Vec
 void IKDirectionLimit::compute_triangles(Ref<IKDirectionLimit> p_next) {
 	first_triangle_next.resize(3);
 	first_triangle_next.write[1] = tangent_circle_center_next_1.normalized();
-	first_triangle_next.write[0] = get_center().normalized();
-	first_triangle_next.write[2] = p_next->get_center().normalized();
+	first_triangle_next.write[0] = get_control_point().normalized();
+	first_triangle_next.write[2] = p_next->get_control_point().normalized();
 
 	second_triangle_next.resize(3);
 	second_triangle_next.write[1] = tangent_circle_center_next_2.normalized();
-	second_triangle_next.write[0] = get_center().normalized();
-	second_triangle_next.write[2] = get_center().normalized();
+	second_triangle_next.write[0] = get_control_point().normalized();
+	second_triangle_next.write[2] = get_control_point().normalized();
 }
 
-void IKDirectionLimit::set_center(Vector3 p_control_point) {
-    center_point = p_control_point;
+void IKDirectionLimit::set_control_point(Vector3 p_control_point) {
+    control_point = p_control_point;
 	if (parent_kusudama.is_valid()) {
 		//	parent_kusudama->constraint_update_notification();
 	}
@@ -1126,10 +1126,10 @@ void IKDirectionLimit::set_center(Vector3 p_control_point) {
 void IKDirectionLimit::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_radius", "radius"), &IKDirectionLimit::set_radius);
 	ClassDB::bind_method(D_METHOD("get_radius"), &IKDirectionLimit::get_radius);
-	ClassDB::bind_method(D_METHOD("set_center", "center"), &IKDirectionLimit::set_center);
-	ClassDB::bind_method(D_METHOD("get_center"), &IKDirectionLimit::get_center);
+	ClassDB::bind_method(D_METHOD("set_control_point", "control_point"), &IKDirectionLimit::set_control_point);
+	ClassDB::bind_method(D_METHOD("get_control_point"), &IKDirectionLimit::get_control_point);
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "radius"), "set_radius", "get_radius");
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "center"), "set_center", "get_center");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "control_point"), "set_control_point", "get_control_point");
 }
 
 void IKAxes::operator=(const IKAxes &p_axes) {
@@ -1764,7 +1764,7 @@ IKConstraintKusudama::point_on_path_sequence(IKAxes p_global_xform, Vector3 p_in
 
 	if (direction_limits.size() == 1) {
 		Ref<IKDirectionLimit> direction_limit = direction_limits[0];
-		result = direction_limit->center_point;
+		result = direction_limit->control_point;
 	} else {
 		for (int direction_limit_i = 0; direction_limit_i < direction_limits.size() - 1; direction_limit_i++) {
 			Ref<IKDirectionLimit> next_direction = direction_limits[direction_limit_i + 1];
@@ -2058,9 +2058,9 @@ bool IKConstraintKusudama::_set(const StringName &p_name, const Variant &p_value
 	} else if (name.begins_with("direction_limits/")) {
 		int index = name.get_slicec('/', 1).to_int();
 		String what = name.get_slicec('/', 2);
-		if (what == "center") {
+		if (what == "control_point") {
 			Ref<IKDirectionLimit> direction_limit = direction_limits[index];
-            direction_limit->set_center(p_value);
+            direction_limit->set_control_point(p_value);
 			return true;
 		} else if (what == "radius") {
 			Ref<IKDirectionLimit> direction_limit = direction_limits[index];
@@ -2080,9 +2080,9 @@ bool IKConstraintKusudama::_get(const StringName &p_name, Variant &r_ret) const 
 	} else if (name.begins_with("direction_limits/")) {
 		int index = name.get_slicec('/', 1).to_int();
 		String what = name.get_slicec('/', 2);
-		if (what == "center") {
+		if (what == "control_point") {
 			Ref<IKDirectionLimit> direction_limit = direction_limits[index];
-			r_ret = direction_limit->get_center();
+			r_ret = direction_limit->get_control_point();
 			return true;
 		} else if (what == "radius") {
 			Ref<IKDirectionLimit> direction_limit = direction_limits[index];
@@ -2096,7 +2096,7 @@ bool IKConstraintKusudama::_get(const StringName &p_name, Variant &r_ret) const 
 void IKConstraintKusudama::_get_property_list(List<PropertyInfo> *p_list) const {
 	p_list->push_back(PropertyInfo(Variant::INT, "direction_limit_count", PROPERTY_HINT_RANGE, "0,16384,1,or_greater"));
 	for (int i = 0; i < direction_limits.size(); i++) {
-		p_list->push_back(PropertyInfo(Variant::VECTOR3, "direction_limits/" + itos(i) + "/center"));
+		p_list->push_back(PropertyInfo(Variant::VECTOR3, "direction_limits/" + itos(i) + "/control_point"));
 		p_list->push_back(
 				PropertyInfo(Variant::REAL, "direction_limits/" + itos(i) + "/radius"));
 	}
