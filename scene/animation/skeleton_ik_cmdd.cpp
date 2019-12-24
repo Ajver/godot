@@ -34,20 +34,20 @@
 #include "scene/animation/skeleton_ik_cmdd.h"
 
 void CMDDInverseKinematic::QCPSolver(
-		Chain p_chain,
+		Ref<Chain> p_chain,
 		float p_dampening,
 		bool p_inverse_weighting,
 		int p_stabilization_passes,
 		int p_iteration,
 		float p_total_iterations) {
-	for (int32_t tip_i = 0; tip_i < p_chain.targets.size(); tip_i++) {
-		ChainItem *start_from = p_chain.targets[tip_i].chain_item;
-		ChainItem *stop_after = &p_chain.chain_root;
+	for (int32_t tip_i = 0; tip_i < p_chain->targets.size(); tip_i++) {
+		Ref<ChainItem> start_from = p_chain->targets[tip_i]->chain_item;
+		Ref<ChainItem> stop_after = &p_chain->chain_root;
 
-		ChainItem *current_bone = start_from;
+		Ref<ChainItem> current_bone = start_from;
 
 		//if the tip is pinned, it should have already been oriented before this function was called.
-		while (current_bone && current_bone != stop_after) {
+		while (current_bone.is_valid() && current_bone != stop_after) {
 			if (!current_bone->ik_orientation_lock) {
 				update_optimal_rotation_to_target_descendants(p_chain, current_bone, p_dampening, false,
 						p_stabilization_passes, p_iteration, p_total_iterations);
@@ -57,21 +57,24 @@ void CMDDInverseKinematic::QCPSolver(
 	}
 }
 
-CMDDInverseKinematic::ChainItem *CMDDInverseKinematic::ChainItem::find_child(const BoneId p_bone_id) {
+Ref<CMDDInverseKinematic::ChainItem> CMDDInverseKinematic::ChainItem::find_child(const BoneId p_bone_id) {
 	for (int i = children.size() - 1; 0 <= i; --i) {
-		if (p_bone_id == children[i].bone) {
-			return &children.write[i];
+		if (p_bone_id == children[i]->bone) {
+			return children.write[i];
 		}
 	}
 	return NULL;
 }
 
-CMDDInverseKinematic::ChainItem *CMDDInverseKinematic::ChainItem::add_child(const BoneId p_bone_id) {
+Ref<CMDDInverseKinematic::ChainItem> CMDDInverseKinematic::ChainItem::add_child(const BoneId p_bone_id) {
 	const int infant_child_id = children.size();
 	children.resize(infant_child_id + 1);
-	children.write[infant_child_id].bone = p_bone_id;
-	children.write[infant_child_id].parent_item = this;
-	return &children.write[infant_child_id];
+	if (children.write[infant_child_id].is_null()) {
+		children.write[infant_child_id].instance();
+	}
+	children.write[infant_child_id]->bone = p_bone_id;
+	children.write[infant_child_id]->parent_item = Ref<ChainItem>(this);
+	return children.write[infant_child_id];
 }
 
 void CMDDInverseKinematic::ChainItem::update_cos_dampening() {
@@ -109,7 +112,7 @@ void CMDDInverseKinematic::ChainItem::set_axes_to_be_snapped(IKAxes p_to_set, IK
 
 void CMDDInverseKinematic::ChainItem::set_stiffness(real_t p_stiffness) {
 	stiffness_scalar = p_stiffness;
-	if (!parent_item) {
+	if (parent_item.is_valid()) {
 		parent_item->update_cos_dampening();
 	}
 }
@@ -119,11 +122,14 @@ void IKConstraintKusudama::optimize_limiting_axes() {
 
 	Vector<Vector3> directions;
 	if (limit_cones.size() == 1) {
-		directions.push_back(directions.write[0] + limit_cones.write[0]->get_control_point().normalized());
+		Ref<IKLimitCone> limit_cone = limit_cones[0];
+		directions.push_back(directions.write[0] + limit_cone->get_control_point().normalized());
 	} else {
 		for (int cone_i = 0; cone_i < limit_cones.size() - 1; cone_i++) {
-			Vector3 this_c = limit_cones.write[cone_i]->get_control_point().normalized();
-			Vector3 next_c = limit_cones.write[cone_i + 1]->get_control_point().normalized();
+			Ref<IKLimitCone> limit_cone_0 = limit_cones[cone_i];
+			Vector3 this_c = limit_cone_0->get_control_point().normalized();
+			Ref<IKLimitCone> limit_cone_1 = limit_cones[cone_i + 1];
+			Vector3 next_c = limit_cone_1->get_control_point().normalized();
 			Quat this_to_next = Quat(this_c, next_c);
 			Vector3 axis;
 			real_t angle;
@@ -168,7 +174,7 @@ void IKConstraintKusudama::optimize_limiting_axes() {
 
 void IKConstraintKusudama::set_axial_limits(float p_min_angle, float p_in_range) {
 	axial_limit->set_min_axial_angle(p_min_angle);
-    axial_limit->set_range(p_in_range);
+	axial_limit->set_range(p_in_range);
 	constraint_update_notification();
 }
 
@@ -190,7 +196,7 @@ IKConstraintKusudama::create_limit_cone_for_index(int p_insert_at, Vector3 p_new
 	Ref<IKLimitCone> limit_cone;
 	limit_cone.instance();
 	limit_cone->initialize(p_new_point, p_radius, this);
-	limit_cones.write[p_insert_at] = limit_cone;
+	limit_cones[p_insert_at] = limit_cone;
 	return limit_cone;
 }
 
@@ -198,14 +204,13 @@ IKConstraintKusudama::create_limit_cone_for_index(int p_insert_at, Vector3 p_new
 bool CMDDInverseKinematic::build_chain(Task *p_task, bool p_force_simple_chain) {
 	ERR_FAIL_COND_V(-1 == p_task->root_bone, false);
 
-	Chain &chain(p_task->chain);
-
-	chain.targets.resize(p_task->end_effectors.size());
-	chain.chain_root.bone = p_task->root_bone;
-	chain.chain_root.initial_transform = p_task->skeleton->get_bone_global_pose(chain.chain_root.bone);
-	chain.chain_root.current_pos = chain.chain_root.initial_transform.origin;
-	chain.chain_root.pb = p_task->skeleton->get_physical_bone(chain.chain_root.bone);
-	chain.middle_chain_item = NULL;
+	Ref<Chain> chain = p_task->chain;
+	chain->targets.resize(p_task->end_effectors.size());
+	chain->chain_root.bone = p_task->root_bone;
+	chain->chain_root.initial_transform = p_task->skeleton->get_bone_global_pose(chain->chain_root.bone);
+	chain->chain_root.current_pos = chain->chain_root.initial_transform.origin;
+	chain->chain_root.pb = p_task->skeleton->get_physical_bone(chain->chain_root.bone);
+	chain->middle_chain_item = Ref<ChainItem>();
 
 	// Holds all IDs that are composing a single chain in reverse order
 	Vector<BoneId> chain_ids;
@@ -216,7 +221,7 @@ bool CMDDInverseKinematic::build_chain(Task *p_task, bool p_force_simple_chain) 
 
 	for (int x = p_task->end_effectors.size() - 1; 0 <= x; --x) {
 
-		const EndEffector *ee(&p_task->end_effectors[x]);
+		const Ref<EndEffector> ee(p_task->end_effectors[x]);
 		ERR_FAIL_COND_V(p_task->root_bone >= ee->effector_bone, false);
 		ERR_FAIL_INDEX_V(ee->effector_bone, p_task->skeleton->get_bone_count(), false);
 
@@ -233,11 +238,11 @@ bool CMDDInverseKinematic::build_chain(Task *p_task, bool p_force_simple_chain) 
 
 		// Build chain by reading chain ids in reverse order
 		// For each chain item id will be created a ChainItem if doesn't exists
-		ChainItem *sub_chain(&chain.chain_root);
+		Ref<ChainItem> sub_chain(&chain->chain_root);
 		for (int i = sub_chain_size - 1; 0 <= i; --i) {
 
-			ChainItem *child_ci(sub_chain->find_child(chain_ids[i]));
-			if (!child_ci) {
+			Ref<ChainItem> child_ci(sub_chain->find_child(chain_ids[i]));
+			if (child_ci.is_null()) {
 
 				child_ci = sub_chain->add_child(chain_ids[i]);
 
@@ -246,7 +251,7 @@ bool CMDDInverseKinematic::build_chain(Task *p_task, bool p_force_simple_chain) 
 				child_ci->initial_transform = p_task->skeleton->get_bone_global_pose(child_ci->bone);
 				child_ci->current_pos = child_ci->initial_transform.origin;
 
-				if (child_ci->parent_item) {
+				if (child_ci->parent_item.is_valid()) {
 					child_ci->length = (child_ci->current_pos - child_ci->parent_item->current_pos).length();
 				}
 			}
@@ -254,16 +259,20 @@ bool CMDDInverseKinematic::build_chain(Task *p_task, bool p_force_simple_chain) 
 			sub_chain = child_ci;
 
 			if (middle_chain_item_id == i) {
-				chain.middle_chain_item = child_ci;
+				chain->middle_chain_item = child_ci;
 			}
 		}
 
 		if (!middle_chain_item_id)
-			chain.middle_chain_item = NULL;
+			chain->middle_chain_item = Ref<ChainItem>();
+
+		if (chain->targets.write[x].is_null()) {
+			chain->targets.write[x].instance();
+		}
 
 		// Initialize current tip
-		chain.targets.write[x].chain_item = sub_chain;
-		chain.targets.write[x].end_effector = ee;
+		chain->targets.write[x]->chain_item = sub_chain;
+		chain->targets.write[x]->end_effector = ee;
 
 		// Allow multieffector
 		// if (p_force_simple_chain) {
@@ -274,31 +283,30 @@ bool CMDDInverseKinematic::build_chain(Task *p_task, bool p_force_simple_chain) 
 		// 	break;
 		// }
 	}
-	if (chain.constraints.is_valid() && sub_chain_size) {
-		chain.constraints->set_constraint_count(sub_chain_size);
+	if (chain->constraints.is_valid() && sub_chain_size) {
+		chain->constraints->set_constraint_count(sub_chain_size);
 		for (int32_t count_i = 0; count_i < sub_chain_size; count_i++) {
 			StringName bone_name = p_task->skeleton->get_bone_name(chain_ids[count_i]);
-			chain.constraints->set_chain_item(count_i, bone_name);
-			Ref<IKConstraintKusudama> constraint;
-			constraint.instance()
-;			chain.constraints->set_constraint(count_i, constraint);
+			chain->constraints->set_chain_item(count_i, bone_name);
+			Ref<IKConstraintKusudama> constraint = chain->constraints->get_constraint(count_i);
+			chain->constraints->set_constraint(count_i, constraint);
 		}
-		chain.constraints->_change_notify();
+		chain->constraints->_change_notify();
 	}
 
 	return true;
 }
 
-void CMDDInverseKinematic::update_chain(const Skeleton *p_sk, ChainItem *p_chain_item) {
+void CMDDInverseKinematic::update_chain(const Skeleton *p_sk, Ref<ChainItem> p_chain_item) {
 
-	if (!p_chain_item)
+	if (p_chain_item.is_null())
 		return;
 
 	p_chain_item->initial_transform = p_sk->get_bone_global_pose(p_chain_item->bone);
 	p_chain_item->current_pos = p_chain_item->initial_transform.origin;
 
 	for (int i = p_chain_item->children.size() - 1; 0 <= i; --i) {
-		update_chain(p_sk, &p_chain_item->children.write[i]);
+		update_chain(p_sk, p_chain_item->children.write[i]);
 	}
 }
 
@@ -317,8 +325,9 @@ CMDDInverseKinematic::Task *CMDDInverseKinematic::create_simple_task(Skeleton *p
 		real_t p_dampening, int p_stabilizing_passes,
 		Ref<SkeletonIKConstraints> p_constraints) {
 
-	CMDDInverseKinematic::EndEffector ee;
-	ee.effector_bone = tip_bone;
+	Ref<CMDDInverseKinematic::EndEffector> ee;
+	ee.instance();
+	ee->effector_bone = tip_bone;
 
 	Task *task(memnew(Task));
 	task->skeleton = p_sk;
@@ -327,12 +336,12 @@ CMDDInverseKinematic::Task *CMDDInverseKinematic::create_simple_task(Skeleton *p
 	task->goal_global_transform = goal_transform;
 	task->dampening = p_dampening;
 	task->stabilizing_passes = p_stabilizing_passes;
-	task->chain.constraints = p_constraints;
+	task->chain->constraints = p_constraints;
 	PoolStringArray bone_names;
 	for (int32_t bone_i = 0; bone_i < p_sk->get_bone_count(); bone_i++) {
 		bone_names.push_back(p_sk->get_bone_name(bone_i));
 	}
-	task->chain.constraints->set_bone_names(bone_names);
+	task->chain->constraints->set_bone_names(bone_names);
 	if (!build_chain(task)) {
 		free_task(task);
 		return NULL;
@@ -354,15 +363,15 @@ void CMDDInverseKinematic::make_goal(Task *p_task, const Transform &p_inverse_tr
 
 	if (blending_delta >= 0.99f) {
 		// Update the end_effector (local transform) without blending
-		p_task->end_effectors.write[0].goal_transform = p_inverse_transf * p_task->goal_global_transform;
+		p_task->end_effectors.write[0]->goal_transform = p_inverse_transf * p_task->goal_global_transform;
 	} else {
 
 		// End effector in local transform
 		const Transform end_effector_pose(
-				p_task->skeleton->get_bone_global_pose(p_task->end_effectors.write[0].effector_bone));
+				p_task->skeleton->get_bone_global_pose(p_task->end_effectors.write[0]->effector_bone));
 
 		// Update the end_effector (local transform) by blending with current pose
-		p_task->end_effectors.write[0].goal_transform = end_effector_pose.interpolate_with(
+		p_task->end_effectors.write[0]->goal_transform = end_effector_pose.interpolate_with(
 				p_inverse_transf * p_task->goal_global_transform, blending_delta);
 	}
 }
@@ -376,18 +385,18 @@ void CMDDInverseKinematic::solve(Task *p_task, real_t blending_delta, bool overr
 
 	make_goal(p_task, p_task->skeleton->get_global_transform().affine_inverse().scaled(p_task->skeleton->get_global_transform().get_basis().get_scale()), blending_delta);
 
-	update_chain(p_task->skeleton, &p_task->chain.chain_root);
+	update_chain(p_task->skeleton, &p_task->chain->chain_root);
 
-	if (p_use_magnet && p_task->chain.middle_chain_item) {
-		p_task->chain.magnet_position = p_task->chain.middle_chain_item->initial_transform.origin.linear_interpolate(
+	if (p_use_magnet && p_task->chain->middle_chain_item.is_valid()) {
+		p_task->chain->magnet_position = p_task->chain->middle_chain_item->initial_transform.origin.linear_interpolate(
 				p_magnet_position, blending_delta);
 		solve_simple(p_task, true);
 	}
 	solve_simple(p_task, false);
 
 	// Assign new bone position.
-	ChainItem *ci(&p_task->chain.chain_root);
-	while (ci) {
+	Ref<ChainItem> ci(&p_task->chain->chain_root);
+	while (ci.is_valid()) {
 		Transform new_bone_pose(ci->initial_transform);
 		new_bone_pose.origin = ci->current_pos;
 
@@ -395,7 +404,7 @@ void CMDDInverseKinematic::solve(Task *p_task, real_t blending_delta, bool overr
 
 			/// Rotate basis
 			const Vector3 initial_ori(
-					(ci->children[0].initial_transform.origin - ci->initial_transform.origin).normalized());
+					(ci->children[0]->initial_transform.origin - ci->initial_transform.origin).normalized());
 			const Vector3 rot_axis(initial_ori.cross(ci->current_ori).normalized());
 
 			if (rot_axis[0] != 0 && rot_axis[1] != 0 && rot_axis[2] != 0) {
@@ -405,33 +414,33 @@ void CMDDInverseKinematic::solve(Task *p_task, real_t blending_delta, bool overr
 		} else {
 			// Set target orientation to tip
 			if (override_tip_basis)
-				new_bone_pose.basis = p_task->chain.targets[0].end_effector->goal_transform.basis;
+				new_bone_pose.basis = p_task->chain->targets[0]->end_effector->goal_transform.basis;
 			else
 				new_bone_pose.basis =
-						new_bone_pose.basis * p_task->chain.targets[0].end_effector->goal_transform.basis;
+						new_bone_pose.basis * p_task->chain->targets[0]->end_effector->goal_transform.basis;
 		}
 
 		p_task->skeleton->set_bone_global_pose_override(ci->bone, new_bone_pose, 1.0);
 
 		if (!ci->children.empty())
-			ci = &ci->children.write[0];
+			ci = ci->children.write[0];
 		else
-			ci = NULL;
+			ci = Ref<ChainItem>();
 	}
 }
 
-void CMDDInverseKinematic::set_default_dampening(CMDDInverseKinematic::Chain &r_chain, real_t p_damp) {
-	r_chain.dampening =
+void CMDDInverseKinematic::set_default_dampening(Ref<CMDDInverseKinematic::Chain> r_chain, real_t p_damp) {
+	r_chain->dampening =
 			MIN(Math_PI * 3.0f, MAX(Math::absf(std::numeric_limits<real_t>::epsilon()), Math::absf(p_damp)));
 	update_armature_segments(r_chain);
 }
 
-void CMDDInverseKinematic::update_armature_segments(CMDDInverseKinematic::Chain &r_chain) {
-	r_chain.bone_segment_map.clear();
-	recursively_update_bone_segment_map_from(r_chain, &r_chain.chain_root);
+void CMDDInverseKinematic::update_armature_segments(Ref<CMDDInverseKinematic::Chain>r_chain) {
+	r_chain->bone_segment_map.clear();
+	recursively_update_bone_segment_map_from(r_chain, &r_chain->chain_root);
 }
 
-void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(CMDDInverseKinematic::ChainItem *p_chain_item,
+void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(Ref<CMDDInverseKinematic::ChainItem> p_chain_item,
 		real_t p_dampening, bool p_is_translate,
 		PoolVector3Array p_localized_tip_headings,
 		PoolVector3Array p_localized_target_headings,
@@ -463,19 +472,19 @@ void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(CMDDInv
 	p_chain_item->constraint->set_limiting_axes(p_chain_item->constraint->get_limiting_axes().translated(translate_by));
 }
 
-void CMDDInverseKinematic::recursively_update_bone_segment_map_from(CMDDInverseKinematic::Chain &r_chain,
+void CMDDInverseKinematic::recursively_update_bone_segment_map_from(Ref<CMDDInverseKinematic::Chain> r_chain,
 		CMDDInverseKinematic::ChainItem *p_start_from) {
 	for (int32_t child_i = 0; child_i < p_start_from->children.size(); child_i++) {
-		r_chain.bone_segment_map.insert(p_start_from->children[child_i].bone, p_start_from);
+		r_chain->bone_segment_map.insert(p_start_from->children[child_i]->bone, p_start_from);
 	}
 }
 
-void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(CMDDInverseKinematic::Chain &r_chain,
-		CMDDInverseKinematic::ChainItem *p_for_bone,
+void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(Ref<CMDDInverseKinematic::Chain> r_chain,
+		Ref<CMDDInverseKinematic::ChainItem> p_for_bone,
 		float p_dampening, bool p_translate,
 		int p_stabilization_passes, int p_iteration,
 		int p_total_iterations) {
-	if (!p_for_bone) {
+	if (p_for_bone.is_null()) {
 		return;
 	}
 	Vector3 this_bone_axes = p_for_bone->current_ori;
@@ -492,37 +501,37 @@ void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(CMDDInv
 	Quat quat;
 	quat.set_euler(p_for_bone->current_ori);
 	bone_xform.basis = Basis(quat);
-	update_target_headings(r_chain, r_chain.localized_target_headings, r_chain.weights, bone_xform);
-	update_effector_headings(r_chain, r_chain.localized_effector_headings, bone_xform);
+	update_target_headings(r_chain, r_chain->localized_target_headings, r_chain->weights, bone_xform);
+	update_effector_headings(r_chain, r_chain->localized_effector_headings, bone_xform);
 
 	float best_rmsd = 0.0f;
 	QCP qcp_convergence_check = QCP(FLT_EPSILON, FLT_EPSILON);
 	float new_rmsd = 999999.0f;
 
 	if (p_stabilization_passes > 0) {
-		best_rmsd = get_manual_msd(r_chain.localized_effector_headings, r_chain.localized_target_headings,
-				r_chain.weights);
+		best_rmsd = get_manual_msd(r_chain->localized_effector_headings, r_chain->localized_target_headings,
+				r_chain->weights);
 	}
 
 	for (int stabilization_i = 0; stabilization_i < p_stabilization_passes + 1; stabilization_i++) {
 		update_optimal_rotation_to_target_descendants(
 				p_for_bone, new_dampening,
 				p_translate,
-				r_chain.localized_effector_headings,
-				r_chain.localized_target_headings,
-				r_chain.weights,
+				r_chain->localized_effector_headings,
+				r_chain->localized_target_headings,
+				r_chain->weights,
 				qcp_convergence_check,
 				p_iteration,
 				p_total_iterations);
 
 		if (p_stabilization_passes > 0) {
-			update_effector_headings(r_chain, r_chain.localized_effector_headings, bone_xform);
-			new_rmsd = get_manual_msd(r_chain.localized_effector_headings, r_chain.localized_target_headings,
-					r_chain.weights);
+			update_effector_headings(r_chain, r_chain->localized_effector_headings, bone_xform);
+			new_rmsd = get_manual_msd(r_chain->localized_effector_headings, r_chain->localized_target_headings,
+					r_chain->weights);
 
 			if (best_rmsd >= new_rmsd) {
 				if (p_for_bone->springy) {
-					if (p_dampening != -1 || p_total_iterations != r_chain.get_default_iterations()) {
+					if (p_dampening != -1 || p_total_iterations != r_chain->get_default_iterations()) {
 						real_t returnfullness = p_for_bone->constraint->get_pain();
 						real_t dampened_angle = p_for_bone->get_stiffness() * p_dampening * returnfullness;
 						real_t total_iterations_sq = p_total_iterations * p_total_iterations;
@@ -539,9 +548,9 @@ void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(CMDDInv
 								p_for_bone->cos_half_returnful_dampened[p_iteration],
 								p_for_bone->half_returnful_dampened[p_iteration]);
 					}
-					update_effector_headings(r_chain, r_chain.localized_effector_headings, bone_xform);
-					new_rmsd = get_manual_msd(r_chain.localized_effector_headings, r_chain.localized_target_headings,
-							r_chain.weights);
+					update_effector_headings(r_chain, r_chain->localized_effector_headings, bone_xform);
+					new_rmsd = get_manual_msd(r_chain->localized_effector_headings, r_chain->localized_target_headings,
+							r_chain->weights);
 				}
 				best_orientation = bone_xform.basis.get_rotation_quat();
 				best_rmsd = new_rmsd;
@@ -575,16 +584,16 @@ real_t CMDDInverseKinematic::get_manual_msd(PoolVector3Array &r_localized_effect
 	return manual_rmsd;
 }
 
-void CMDDInverseKinematic::update_target_headings(Chain &r_chain, PoolVector3Array &r_localized_target_headings,
+void CMDDInverseKinematic::update_target_headings(Ref<Chain> r_chain, PoolVector3Array &r_localized_target_headings,
 		PoolRealArray p_weights, Transform p_bone_xform) {
 
 	int hdx = 0;
-	for (int target_i = 0; target_i < r_chain.targets.size(); target_i++) {
-		ChainItem *sb = r_chain.targets[target_i].chain_item;
+	for (int target_i = 0; target_i < r_chain->targets.size(); target_i++) {
+		Ref<ChainItem> sb = r_chain->targets[target_i]->chain_item;
 		IKAxes targetAxes = sb->constraint->get_limiting_axes();
 		Vector3 origin = sb->current_pos;
 		r_localized_target_headings[hdx] = targetAxes.origin - origin;
-		uint8_t modeCode = r_chain.targets[target_i].get_mode_code();
+		uint8_t modeCode = r_chain->targets[target_i]->get_mode_code();
 		hdx++;
 		if ((modeCode & ChainTarget::XDir) != 0) {
 			Ray xTarget;
@@ -613,16 +622,16 @@ void CMDDInverseKinematic::update_target_headings(Chain &r_chain, PoolVector3Arr
 	}
 }
 
-void CMDDInverseKinematic::update_effector_headings(Chain &r_chain, PoolVector3Array &r_localized_effector_headings,
+void CMDDInverseKinematic::update_effector_headings(Ref<Chain> r_chain, PoolVector3Array &r_localized_effector_headings,
 		Transform p_bone_xform) {
 	int hdx = 0;
-	for (int target_i = 0; target_i < r_chain.targets.size(); target_i++) {
-		ChainItem *sb = r_chain.targets[target_i].chain_item;
-		IKAxes effector = r_chain.targets[target_i].end_effector->goal_transform;
+	for (int target_i = 0; target_i < r_chain->targets.size(); target_i++) {
+		Ref<ChainItem> sb = r_chain->targets[target_i]->chain_item;
+		IKAxes effector = r_chain->targets[target_i]->end_effector->goal_transform;
 		// tipAxes.updateGlobal();
 		Vector3 origin = sb->current_pos;
 		r_localized_effector_headings[hdx] = effector.origin - origin;
-		uint8_t modeCode = r_chain.targets[target_i].get_mode_code();
+		uint8_t modeCode = r_chain->targets[target_i]->get_mode_code();
 		hdx++;
 
 		if ((modeCode & ChainTarget::XDir) != 0) {
@@ -681,27 +690,27 @@ void SkeletonIKCMDD::_validate_property(PropertyInfo &property) const {
 }
 
 void IKLimitAxial::set_min_axial_angle(real_t p_min_axial_angle) {
-    min_axial_angle = p_min_axial_angle;
+	min_axial_angle = p_min_axial_angle;
 }
 
 real_t IKLimitAxial::get_min_axial_angle() const {
-    return min_axial_angle;
+	return min_axial_angle;
 }
 void IKLimitAxial::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("set_min_angle_degree", "angle"), &IKLimitAxial::set_min_axial_angle_degree);
-    ClassDB::bind_method(D_METHOD("get_min_angle_degree"), &IKLimitAxial::get_min_axial_angle_degree);
-    ClassDB::bind_method(D_METHOD("set_range_degree", "range"), &IKLimitAxial::set_range_degree);
-    ClassDB::bind_method(D_METHOD("get_range_degree"), &IKLimitAxial::get_range_degree);
-    ADD_PROPERTY(PropertyInfo(Variant::REAL, "min_angle_degree"), "set_min_angle_degree", "get_min_angle_degree");
-    ADD_PROPERTY(PropertyInfo(Variant::REAL, "range_degree"), "set_range_degree", "get_range_degree");
+	ClassDB::bind_method(D_METHOD("set_min_angle_degree", "angle"), &IKLimitAxial::set_min_axial_angle_degree);
+	ClassDB::bind_method(D_METHOD("get_min_angle_degree"), &IKLimitAxial::get_min_axial_angle_degree);
+	ClassDB::bind_method(D_METHOD("set_range_degree", "range"), &IKLimitAxial::set_range_degree);
+	ClassDB::bind_method(D_METHOD("get_range_degree"), &IKLimitAxial::get_range_degree);
+	ADD_PROPERTY(PropertyInfo(Variant::REAL, "min_angle_degree"), "set_min_angle_degree", "get_min_angle_degree");
+	ADD_PROPERTY(PropertyInfo(Variant::REAL, "range_degree"), "set_range_degree", "get_range_degree");
 }
 
 real_t IKLimitAxial::get_range() const {
-    return range;
+	return range;
 }
 
 void IKLimitAxial::set_range(real_t p_range) {
-    range = p_range;
+	range = p_range;
 }
 
 void SkeletonIKCMDD::_bind_methods() {
@@ -1214,7 +1223,8 @@ void IKConstraintKusudama::update_tangent_radii() {
 		if (next.is_null()) {
 			continue;
 		}
-		limit_cones.write[cone_i]->update_tangent_handles(next);
+		Ref<IKLimitCone> limit_cone = limit_cones[cone_i];
+		limit_cone->update_tangent_handles(next);
 	}
 }
 
@@ -1627,12 +1637,16 @@ bool SkeletonIKConstraints::_set(const StringName &p_name, const Variant &p_valu
 
 Ref<IKConstraintKusudama> SkeletonIKConstraints::get_constraint(int32_t p_index) const {
 	ERR_FAIL_INDEX_V(p_index, constraints.size(), Ref<IKConstraintKusudama>())
-	return constraints[p_index].constraint;
+	ERR_FAIL_COND_V(constraints[p_index].is_null(), Ref<IKConstraintKusudama>());
+	return constraints[p_index]->constraint;
 }
 
 void SkeletonIKConstraints::set_constraint(int32_t p_index, Ref<IKConstraintKusudama> p_constraint) {
 	ERR_FAIL_INDEX(p_index, constraints.size())
-	constraints.write[p_index].constraint = p_constraint;
+	if(constraints.write[p_index].is_null()){
+		constraints.write[p_index].instance();
+	}
+	constraints.write[p_index]->constraint = Ref<IKConstraintKusudama>(p_constraint);
 	_change_notify();
 	emit_changed();
 }
@@ -1649,12 +1663,16 @@ void SkeletonIKConstraints::set_bone_names(PoolStringArray p_bones) {
 
 StringName SkeletonIKConstraints::get_chain_item(int32_t p_index) const {
 	ERR_FAIL_INDEX_V(p_index, constraints.size(), "")
-	return constraints[p_index].chain_item_name;
+	ERR_FAIL_COND_V(constraints[p_index].is_null(), "");
+	return constraints[p_index]->chain_item_name;
 }
 
 void SkeletonIKConstraints::set_chain_item(int32_t p_index, StringName p_value) {
 	ERR_FAIL_INDEX(p_index, constraints.size())
-	constraints.write[p_index].chain_item_name = p_value;
+	if (constraints.write[p_index].is_null()) {
+		constraints.write[p_index].instance();
+	}
+	constraints.write[p_index]->chain_item_name = p_value;
 	_change_notify();
 	emit_changed();
 }
@@ -1732,8 +1750,7 @@ real_t IKConstraintKusudama::angle_to_twist_center(IKAxes p_global_xform, IKAxes
 	real_t angle_delta_2 = Basis(decomposition[1]).get_axis(axis_y).y * -1.0f;
 	angle_delta_2 = to_tau(angle_delta_2);
 	real_t dist_to_mid = signed_angle_difference(angle_delta_2,
-	        Math_TAU - (to_tau(axial_limit->get_min_axial_angle())
-	        + (to_tau((axial_limit->get_range()) / 2.0f))));
+			Math_TAU - (to_tau(axial_limit->get_min_axial_angle()) + (to_tau((axial_limit->get_range()) / 2.0f))));
 	return dist_to_mid;
 }
 
@@ -1745,11 +1762,13 @@ IKConstraintKusudama::point_on_path_sequence(IKAxes p_global_xform, Vector3 p_in
 	Vector3 result = point;
 
 	if (limit_cones.size() == 1) {
-		result = limit_cones[0]->control_point;
+		Ref<IKLimitCone> limit_cone = limit_cones[0];
+		result = limit_cone->control_point;
 	} else {
 		for (int cone_i = 0; cone_i < limit_cones.size() - 1; cone_i++) {
 			Ref<IKLimitCone> next_cone = limit_cones[cone_i + 1];
-			Vector3 closest_path_point = limit_cones[cone_i]->get_closest_path_point(next_cone, point);
+			Ref<IKLimitCone> limit_cone = limit_cones[cone_i];
+			Vector3 closest_path_point = limit_cone->get_closest_path_point(next_cone, point);
 			real_t close_dot = closest_path_point.dot(point);
 			if (close_dot > closestPointDot) {
 				result = closest_path_point;
@@ -1778,11 +1797,12 @@ bool IKConstraintKusudama::is_in_limits_(const Vector3 p_global_point) const {
 }
 
 void IKConstraintKusudama::update_rotational_freedom() {
-	float axialConstrainedHyperArea = axial_constrained ? ( to_tau(axial_limit->get_range()) / Math_TAU) : 1.0f;
+	float axialConstrainedHyperArea = axial_constrained ? (to_tau(axial_limit->get_range()) / Math_TAU) : 1.0f;
 	// quick and dirty solution (should revisit);
 	float totalLimitConeSurfaceAreaRatio = 0.0f;
 	for (int32_t limit_cone_i = 0; limit_cone_i < limit_cones.size(); limit_cone_i++) {
-		totalLimitConeSurfaceAreaRatio += (limit_cones[limit_cone_i]->get_radius() * 2.0f) / Math_TAU;
+		Ref<IKLimitCone> limit_cone = limit_cones[limit_cone_i];
+		totalLimitConeSurfaceAreaRatio += (limit_cone->get_radius() * 2.0f) / Math_TAU;
 	}
 	rotational_freedom = axialConstrainedHyperArea *
 						 (orientation_constrained ? MIN(totalLimitConeSurfaceAreaRatio, 1.0f) : 1.0f);
@@ -1991,7 +2011,7 @@ Vector3 CMDDInverseKinematic::ChainTarget::get_location() {
 	return chain_item->current_pos;
 }
 
-CMDDInverseKinematic::ChainItem *CMDDInverseKinematic::ChainTarget::for_bone() {
+Ref<CMDDInverseKinematic::ChainItem> CMDDInverseKinematic::ChainTarget::for_bone() {
 	return chain_item;
 }
 
@@ -2006,11 +2026,11 @@ void IKConstraintKusudama::set_pain(real_t p_amount) {
 	if (attached_to == NULL || attached_to->parent_armature == NULL) {
 		return;
 	}
-	CMDDInverseKinematic::Chain *s = attached_to->parent_armature;
+	Ref<CMDDInverseKinematic::Chain> s = attached_to->parent_armature;
 	if (s == NULL) {
 		return;
 	}
-	CMDDInverseKinematic::ChainItem *wb = s->chain_root.find_child(attached_to->bone);
+	Ref<CMDDInverseKinematic::ChainItem> wb = s->chain_root.find_child(attached_to->bone);
 	if (wb == NULL) {
 		return;
 	}
@@ -2028,7 +2048,7 @@ bool IKConstraintKusudama::_set(const StringName &p_name, const Variant &p_value
 				Ref<IKLimitCone> limit_cone;
 				limit_cone.instance();
 				limit_cone->initialize(Vector3(), 0.0f, this);
-				limit_cones.write[limit_cone_i] = limit_cone;
+				limit_cones[limit_cone_i] = limit_cone;
 			}
 		}
 		_change_notify();
@@ -2038,10 +2058,12 @@ bool IKConstraintKusudama::_set(const StringName &p_name, const Variant &p_value
 		int index = name.get_slicec('/', 1).to_int();
 		String what = name.get_slicec('/', 2);
 		if (what == "control_point") {
-			limit_cones.write[index]->set_control_point(p_value);
+			Ref<IKLimitCone> limit_cone = limit_cones[index];
+			limit_cone->set_control_point(p_value);
 			return true;
 		} else if (what == "radius") {
-			limit_cones.write[index]->set_radius(p_value);
+			Ref<IKLimitCone> limit_cone = limit_cones[index];
+			limit_cone->set_radius(p_value);
 			return true;
 		}
 	}
@@ -2058,10 +2080,12 @@ bool IKConstraintKusudama::_get(const StringName &p_name, Variant &r_ret) const 
 		int index = name.get_slicec('/', 1).to_int();
 		String what = name.get_slicec('/', 2);
 		if (what == "control_point") {
-			r_ret = limit_cones[index]->get_control_point();
+			Ref<IKLimitCone> limit_cone = limit_cones[index];
+			r_ret = limit_cone->get_control_point();
 			return true;
 		} else if (what == "radius") {
-			r_ret = limit_cones[index]->get_radius();
+			Ref<IKLimitCone> limit_cone = limit_cones[index];
+			r_ret = limit_cone->get_radius();
 			return true;
 		}
 	}
@@ -2069,7 +2093,7 @@ bool IKConstraintKusudama::_get(const StringName &p_name, Variant &r_ret) const 
 }
 
 void IKConstraintKusudama::_get_property_list(List<PropertyInfo> *p_list) const {
-    p_list->push_back(PropertyInfo(Variant::INT, "limit_cone_count", PROPERTY_HINT_RANGE, "0,16384,1,or_greater"));
+	p_list->push_back(PropertyInfo(Variant::INT, "limit_cone_count", PROPERTY_HINT_RANGE, "0,16384,1,or_greater"));
 	for (int i = 0; i < limit_cones.size(); i++) {
 		p_list->push_back(PropertyInfo(Variant::VECTOR3, "limit_cones/" + itos(i) + "/control_point"));
 		p_list->push_back(
@@ -2078,19 +2102,19 @@ void IKConstraintKusudama::_get_property_list(List<PropertyInfo> *p_list) const 
 }
 
 void IKConstraintKusudama::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("set_axial_limit", "axial_limit"), &IKConstraintKusudama::set_axial_limit);
-    ClassDB::bind_method(D_METHOD("get_axial_limit"), &IKConstraintKusudama::get_axial_limit);
-    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "limit_axial", PROPERTY_HINT_RESOURCE_TYPE, "IKLimitAxial"), "set_axial_limit", "get_axial_limit");
+	ClassDB::bind_method(D_METHOD("set_axial_limit", "axial_limit"), &IKConstraintKusudama::set_axial_limit);
+	ClassDB::bind_method(D_METHOD("get_axial_limit"), &IKConstraintKusudama::get_axial_limit);
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "limit_axial", PROPERTY_HINT_RESOURCE_TYPE, "IKLimitAxial"), "set_axial_limit", "get_axial_limit");
 }
 
 Ref<IKLimitAxial> IKConstraintKusudama::get_axial_limit() const {
-    return axial_limit;
+	return axial_limit;
 }
 
 void IKConstraintKusudama::set_axial_limit(Ref<IKLimitAxial> p_axial_limit) {
-    set_axial_limits(axial_limit->get_min_axial_angle(), from_tau(axial_limit->get_range()));
-    _change_notify();
-    emit_changed();
+	set_axial_limits(axial_limit->get_min_axial_angle(), from_tau(axial_limit->get_range()));
+	_change_notify();
+	emit_changed();
 }
 
 void CMDDInverseKinematic::ChainTarget::set_parent_pin(CMDDInverseKinematic::ChainTarget *parent) {
