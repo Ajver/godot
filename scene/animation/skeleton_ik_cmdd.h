@@ -497,9 +497,7 @@ public:
 };
 
 // CMDD is Cyclic Mean Deviation Descent
-class CMDDInverseKinematic : public Object {
-	GDCLASS(CMDDInverseKinematic, Object);
-
+class CMDDInverseKinematic {
 public:
 	struct EndEffector : Reference {
 		GDCLASS(EndEffector, Reference);
