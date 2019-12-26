@@ -160,20 +160,20 @@ void IKConstraintKusudama::optimize_limiting_axes() {
 	Ray newYRay = Ray(Vector3(0.0, 0.0, 0.0), newY);
 
 	//TODO
-//	    Quat oldYtoNewY = Quat(limiting_axes.y_().heading(), original_limiting_axes.getGlobalOf(newYRay).heading());
-//	    limiting_axes.rotate(oldYtoNewY);
-//
-//	    for (int32_t direction_limit_i =0 ; direction_limit_i < direction_limits.size(); direction_limit_i++) {
-//	        Ref<IKDirectionLimit> direction_limit = direction_limits[direction_limit_i];
-//	        original_limiting_axes.setToGlobalOf(direction_limit->get_center(), direction_limit->get_control_point().normalized());
-//	        limiting_axes.setToLocalOf(direction_limit->get_center(), direction_limit->get_control_point().normalized());
-//	        direction_limit->get_control_point().normalize();
-//	    }
+	//	    Quat oldYtoNewY = Quat(limiting_axes.y_().heading(), original_limiting_axes.getGlobalOf(newYRay).heading());
+	//	    limiting_axes.rotate(oldYtoNewY);
+	//
+	//	    for (int32_t direction_limit_i =0 ; direction_limit_i < direction_limits.size(); direction_limit_i++) {
+	//	        Ref<IKDirectionLimit> direction_limit = direction_limits[direction_limit_i];
+	//	        original_limiting_axes.setToGlobalOf(direction_limit->get_center(), direction_limit->get_control_point().normalized());
+	//	        limiting_axes.setToLocalOf(direction_limit->get_center(), direction_limit->get_control_point().normalized());
+	//	        direction_limit->get_control_point().normalize();
+	//	    }
 	update_tangent_radii();
 }
 
 void IKConstraintKusudama::set_axial_limits(float p_min_angle, float p_in_range) {
-    axial_limit->set_min_twist_angle(p_min_angle);
+	axial_limit->set_min_twist_angle(p_min_angle);
 	axial_limit->set_range(p_in_range);
 	constraint_update_notification();
 }
@@ -196,7 +196,7 @@ IKConstraintKusudama::create_direction_limit_for_index(int p_insert_at, Vector3 
 	Ref<IKDirectionLimit> direction_limit;
 	direction_limit.instance();
 	direction_limit->initialize(p_new_point, p_radius, this);
-    direction_limits[p_insert_at] = direction_limit;
+	direction_limits[p_insert_at] = direction_limit;
 	return direction_limit;
 }
 
@@ -435,7 +435,7 @@ void CMDDInverseKinematic::set_default_dampening(Ref<CMDDInverseKinematic::Chain
 	update_armature_segments(r_chain);
 }
 
-void CMDDInverseKinematic::update_armature_segments(Ref<CMDDInverseKinematic::Chain>r_chain) {
+void CMDDInverseKinematic::update_armature_segments(Ref<CMDDInverseKinematic::Chain> r_chain) {
 	r_chain->bone_segment_map.clear();
 	recursively_update_bone_segment_map_from(r_chain, &r_chain->chain_root);
 }
@@ -690,7 +690,7 @@ void SkeletonIKCMDD::_validate_property(PropertyInfo &property) const {
 }
 
 void IKTwistLimit::set_min_twist_angle(real_t p_min_axial_angle) {
-    min_twist_angle = p_min_axial_angle;
+	min_twist_angle = p_min_axial_angle;
 }
 
 real_t IKTwistLimit::get_min_twist_angle() const {
@@ -908,7 +908,7 @@ Skeleton *SkeletonIKCMDD::get_parent_skeleton() const {
 #endif // _3D_DISABLED
 
 void IKDirectionLimit::initialize(Vector3 p_location, real_t p_rad, Ref<IKConstraintKusudama> p_attached_to) {
-    set_control_point(p_location);
+	set_control_point(p_location);
 	tangent_circle_center_next_1 = get_orthogonal(p_location);
 	tangent_circle_center_next_2 = tangent_circle_center_next_1 * -1.0f;
 
@@ -1021,8 +1021,7 @@ void IKDirectionLimit::update_tangent_handles(Ref<IKDirectionLimit> p_next) {
 void IKDirectionLimit::set_radius(real_t p_radius) {
 	radius = p_radius;
 	radius_cosine = Math::cos(p_radius);
-	//TODO
-	// parent_kusudama->constraint_update_notification();
+	parent_kusudama->constraint_update_notification();
 }
 
 Vector3 IKDirectionLimit::get_orthogonal(Vector3 p_vec) {
@@ -1117,7 +1116,7 @@ void IKDirectionLimit::compute_triangles(Ref<IKDirectionLimit> p_next) {
 }
 
 void IKDirectionLimit::set_control_point(Vector3 p_control_point) {
-    control_point = p_control_point;
+	control_point = p_control_point;
 	if (parent_kusudama.is_valid()) {
 		//	parent_kusudama->constraint_update_notification();
 	}
@@ -1196,7 +1195,8 @@ real_t IKConstraintKusudama::snap_to_twist_limits(IKAxes p_to_set, IKAxes p_limi
 	if (fromMinToAngleDelta < Math_TAU - to_tau(axial_limit->get_range())) {
 		real_t distToMin = Math::absf(signed_angle_difference(angleDelta2, axial_limit->get_min_twist_angle()));
 		real_t distToMax = Math::absf(signed_angle_difference(angleDelta2, Math_TAU - (to_tau(
-                axial_limit->get_min_twist_angle()) + to_tau(axial_limit->get_range()))));
+																							   axial_limit->get_min_twist_angle()) +
+																							  to_tau(axial_limit->get_range()))));
 		real_t turnDiff = 1.0f;
 		turnDiff *= p_limiting_axes.get_global_chirality();
 		if (distToMin < distToMax) {
@@ -1644,7 +1644,7 @@ Ref<IKConstraintKusudama> SkeletonIKConstraints::get_constraint(int32_t p_index)
 
 void SkeletonIKConstraints::set_constraint(int32_t p_index, Ref<IKConstraintKusudama> p_constraint) {
 	ERR_FAIL_INDEX(p_index, constraints.size())
-	if(constraints.write[p_index].is_null()){
+	if (constraints.write[p_index].is_null()) {
 		constraints.write[p_index].instance();
 	}
 	constraints.write[p_index]->constraint = Ref<IKConstraintKusudama>(p_constraint);
@@ -1803,7 +1803,7 @@ void IKConstraintKusudama::update_rotational_freedom() {
 	float total_limit_cone_surface_area_ratio = 0.0f;
 	for (int32_t limit_cone_i = 0; limit_cone_i < direction_limits.size(); limit_cone_i++) {
 		Ref<IKDirectionLimit> direction_limit = direction_limits[limit_cone_i];
-        total_limit_cone_surface_area_ratio += (direction_limit->get_radius() * 2.0f) / Math_TAU;
+		total_limit_cone_surface_area_ratio += (direction_limit->get_radius() * 2.0f) / Math_TAU;
 	}
 	rotational_freedom = axialConstrainedHyperArea *
 						 (orientation_constrained ? MIN(total_limit_cone_surface_area_ratio, 1.0f) : 1.0f);
@@ -1919,24 +1919,23 @@ int CMDDInverseKinematic::Chain::get_default_iterations() const {
 }
 
 void CMDDInverseKinematic::ChainTarget::set_target_priorities(float p_x_priority, float p_y_priority, float p_z_priority) {
-	bool xDir = p_x_priority > 0 ? true : false;
-	bool yDir = p_y_priority > 0 ? true : false;
-	bool zDir = p_z_priority > 0 ? true : false;
-	modeCode = 0;
-	if (xDir) modeCode += XDir;
-	if (yDir) modeCode += YDir;
-	if (zDir) modeCode += ZDir;
+	bool x_dir = p_x_priority > 0 ? true : false;
+	bool y_dir = p_y_priority > 0 ? true : false;
+	bool z_dir = p_z_priority > 0 ? true : false;
+	mode_code = 0;
+	if (x_dir) mode_code += XDir;
+	if (y_dir) mode_code += YDir;
+	if (z_dir) mode_code += ZDir;
 
-	subTargetCount = 1;
-	if ((modeCode & 1) != 0) subTargetCount++;
-	if ((modeCode & 2) != 0) subTargetCount++;
-	if ((modeCode & 4) != 0) subTargetCount++;
+	sub_target_count = 1;
+	if ((mode_code & 1) != 0) sub_target_count++;
+	if ((mode_code & 2) != 0) sub_target_count++;
+	if ((mode_code & 4) != 0) sub_target_count++;
 
-	xPriority = p_x_priority;
-	yPriority = p_y_priority;
-	zPriority = p_z_priority;
-	//TODO FIX
-	// chain_item->parent_item.rootwardlyUpdateFalloffCacheFrom(forBone);
+	x_priority = p_x_priority;
+	y_priority = p_y_priority;
+	z_priority = p_z_priority;
+	chain_item->parent_item->rootwardly_update_falloff_cache_from(for_bone());
 }
 
 real_t CMDDInverseKinematic::ChainTarget::get_depth_falloff() const {
@@ -1945,8 +1944,7 @@ real_t CMDDInverseKinematic::ChainTarget::get_depth_falloff() const {
 
 void CMDDInverseKinematic::ChainTarget::set_depth_falloff(float depth) {
 	depthFalloff = depth;
-	//TODO
-	// chain_item->parent_item->rootwardlyUpdateFalloffCacheFrom(forBone);
+	chain_item->parent_item->rootwardly_update_falloff_cache_from(for_bone());
 }
 
 void CMDDInverseKinematic::ChainTarget::disable() {
@@ -1970,23 +1968,23 @@ bool CMDDInverseKinematic::ChainTarget::is_enabled() const {
 }
 
 int CMDDInverseKinematic::ChainTarget::get_subtarget_count() {
-	return subTargetCount;
+	return sub_target_count;
 }
 
 uint8_t CMDDInverseKinematic::ChainTarget::get_mode_code() const {
-	return modeCode;
+	return mode_code;
 }
 
 real_t CMDDInverseKinematic::ChainTarget::get_x_priority() const {
-	return xPriority;
+	return x_priority;
 }
 
 real_t CMDDInverseKinematic::ChainTarget::get_y_priority() const {
-	return yPriority;
+	return y_priority;
 }
 
 real_t CMDDInverseKinematic::ChainTarget::get_z_priority() const {
-	return zPriority;
+	return z_priority;
 }
 
 IKAxes CMDDInverseKinematic::ChainTarget::get_axes() const {
@@ -2049,7 +2047,7 @@ bool IKConstraintKusudama::_set(const StringName &p_name, const Variant &p_value
 				Ref<IKDirectionLimit> direction_limit;
 				direction_limit.instance();
 				direction_limit->initialize(Vector3(), 0.0f, this);
-                direction_limits[direction_limit_i] = direction_limit;
+				direction_limits[direction_limit_i] = direction_limit;
 			}
 		}
 		_change_notify();
@@ -2060,7 +2058,7 @@ bool IKConstraintKusudama::_set(const StringName &p_name, const Variant &p_value
 		String what = name.get_slicec('/', 2);
 		if (what == "control_point") {
 			Ref<IKDirectionLimit> direction_limit = direction_limits[index];
-            direction_limit->set_control_point(p_value);
+			direction_limit->set_control_point(p_value);
 			return true;
 		} else if (what == "radius") {
 			Ref<IKDirectionLimit> direction_limit = direction_limits[index];
@@ -2069,6 +2067,92 @@ bool IKConstraintKusudama::_set(const StringName &p_name, const Variant &p_value
 		}
 	}
 	return false;
+}
+
+void CMDDInverseKinematic::ChainItem::rootwardly_update_falloff_cache_from(Ref<CMDDInverseKinematic::ChainItem> p_current) {
+	Ref<ChainItem> current = p_current;
+	while (current.is_valid()) {
+		current->parent_armature->create_headings_arrays();
+		current = current->parent_item;
+	}
+}
+
+void CMDDInverseKinematic::Chain::recursively_create_penalty_array(Ref<CMDDInverseKinematic::Chain> from,
+		Vector<Vector<real_t> > weight_array,
+		Vector<Ref<CMDDInverseKinematic::ChainItem> >
+
+				pin_sequence,
+		real_t current_falloff) {
+	if (current_falloff == 0) {
+		return;
+	} else {
+		for (int32_t target_i = 0; target_i < from->targets.size(); target_i++) {
+			Ref<ChainTarget> target = from->targets[target_i];
+			if (target.is_valid()) {
+				Vector<real_t> inner_weight_array;
+				uint8_t mode_code = target->get_mode_code();
+				inner_weight_array.push_back(target->get_target_weight() * current_falloff);
+				float max_target_weight = 0.0f;
+				if ((mode_code & ChainTarget::XDir) != 0)
+					max_target_weight = MAX(max_target_weight, target->get_x_priority());
+				if ((mode_code & ChainTarget::YDir) != 0)
+					max_target_weight = MAX(max_target_weight, target->get_y_priority());
+				if ((mode_code & ChainTarget::ZDir) != 0)
+					max_target_weight = MAX(max_target_weight, target->get_z_priority());
+
+				if (max_target_weight == 0.0f) max_target_weight = 1.0f;
+
+				max_target_weight = 1.0f;
+
+				if ((mode_code & ChainTarget::XDir) != 0) {
+					float sub_target_weight = target->get_target_weight() * (target->get_x_priority() / max_target_weight) * current_falloff;
+					inner_weight_array.push_back(sub_target_weight);
+					inner_weight_array.push_back(sub_target_weight);
+				}
+				if ((mode_code & ChainTarget::YDir) != 0) {
+					float sub_target_weight = target->get_target_weight() * (target->get_y_priority() / max_target_weight) * current_falloff;
+					inner_weight_array.push_back(sub_target_weight);
+					inner_weight_array.push_back(sub_target_weight);
+				}
+				if ((mode_code & ChainTarget::ZDir) != 0) {
+					float sub_target_weight = target->get_target_weight() * (target->get_z_priority() / max_target_weight) * current_falloff;
+					inner_weight_array.push_back(sub_target_weight);
+					inner_weight_array.push_back(sub_target_weight);
+				}
+				pin_sequence.push_back(target->for_bone());
+				weight_array.push_back(inner_weight_array);
+			}
+			real_t this_falloff = target.is_null() ? 1.0f : target->get_depth_falloff();
+			recursively_create_penalty_array(this, weight_array, pin_sequence, current_falloff * this_falloff);
+		}
+	}
+}
+
+void CMDDInverseKinematic::Chain::create_headings_arrays() {
+	Vector<Vector<real_t> > penalty_array;
+	Vector<Ref<ChainItem> > target_sequence;
+	recursively_create_penalty_array(this, penalty_array, target_sequence, 1.0f);
+	Vector<Ref<ChainItem> > target_bones;
+	target_bones.resize(target_sequence.size());
+	int total_headings = 0;
+	for (int32_t penalty_i = 0; penalty_i < penalty_array.size(); penalty_i++) {
+		total_headings += penalty_array[penalty_i].size();
+	}
+	for (int pin_i = 0; pin_i < target_sequence.size(); pin_i++) {
+		target_bones.write[pin_i] = target_sequence[pin_i];
+	}
+	localized_effector_headings.resize(total_headings);
+	localized_target_headings.resize(total_headings);
+	weights.resize(total_headings);
+	int current_heading = 0;
+	for (int32_t array_i = 0; array_i < penalty_array.size(); array_i++) {
+		for (int32_t penalty_i = 0; penalty_i < penalty_array[array_i].size(); penalty_i++) {
+			weights.write()[current_heading] = penalty_array[array_i][penalty_i];
+			localized_effector_headings[current_heading] = Vector3();
+			localized_target_headings[current_heading] = Vector3();
+			current_heading++;
+		}
+	}
 }
 
 bool IKConstraintKusudama::_get(const StringName &p_name, Variant &r_ret) const {
@@ -2165,7 +2249,7 @@ bool CMDDInverseKinematic::ChainTarget::is_ancestor_of(CMDDInverseKinematic::Cha
 	return result;
 }
 
-real_t CMDDInverseKinematic::ChainTarget::get_pin_weight() {
+real_t CMDDInverseKinematic::ChainTarget::get_target_weight() {
 	return pin_weight;
 }
 

@@ -562,6 +562,7 @@ public:
 		void set_axes_to_be_snapped(IKAxes p_to_set, IKAxes p_limiting_axes, real_t p_cos_half_angle_dampen);
 
 		void populate_return_dampening_iteration_array(Ref<IKConstraintKusudama> k);
+		void rootwardly_update_falloff_cache_from(Ref<ChainItem> p_current);
 	};
 
 	struct ChainTarget : Reference {
@@ -585,7 +586,7 @@ public:
 
 		ChainTarget(Ref<ChainItem> p_chain_item, const Ref<EndEffector> p_end_effector, bool p_enabled) {
 			enabled = p_enabled;
-			set_target_priorities(xPriority, yPriority, zPriority);
+			set_target_priorities(x_priority, y_priority, z_priority);
 		}
 
 	protected:
@@ -593,9 +594,9 @@ public:
 		ChainTarget *parent_target;
 		Vector<ChainTarget *> childPins;
 		float pin_weight = 1;
-		uint8_t modeCode = 7;
-		int subTargetCount = 4;
-		real_t xPriority = 1.0f, yPriority = 1.0f, zPriority = 1.0f;
+		uint8_t mode_code = 7;
+		int sub_target_count = 4;
+		real_t x_priority = 1.0f, y_priority = 1.0f, z_priority = 1.0f;
 		real_t depthFalloff = 0.0f;
 
 	public:
@@ -718,7 +719,7 @@ public:
 
 		bool is_ancestor_of(ChainTarget *potentialDescendent);
 
-		real_t get_pin_weight();
+		real_t get_target_weight();
 	};
 
 	struct Chain : public Reference {
@@ -738,6 +739,8 @@ public:
 		int ik_iterations = 15;
 
 		int get_default_iterations() const;
+		void recursively_create_penalty_array(Ref<Chain> from, Vector<Vector<real_t> > weight_array, Vector<Ref<ChainItem> > pin_sequence, real_t current_falloff);
+		void create_headings_arrays();
 	};
 
 public:
@@ -893,7 +896,7 @@ public:
 		return Math::deg2rad(get_min_twist_angle());
 	}
 	void set_min_twist_angle_degree(real_t p_min_axial_angle) {
-        set_min_twist_angle(Math::rad2deg(p_min_axial_angle));
+		set_min_twist_angle(Math::rad2deg(p_min_axial_angle));
 	}
 	real_t get_range_degree() const {
 		return Math::rad2deg(get_range());
