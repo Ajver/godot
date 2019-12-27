@@ -369,8 +369,8 @@ class QCP : public Reference {
 	PoolRealArray weight;
 	real_t wsum = 0;
 
-	Vector3 targetCenter;
-	Vector3 movedCenter;
+	Vector3 target_center;
+	Vector3 moved_center;
 
 	real_t e0 = 0;
 	real_t rmsd = 0;
@@ -592,8 +592,8 @@ public:
 	protected:
 		bool enabled;
 		ChainTarget *parent_target;
-		Vector<ChainTarget *> childPins;
-		float pin_weight = 1;
+		Vector<ChainTarget *> child_targets;
+		float target_weight = 1;
 		uint8_t mode_code = 7;
 		int sub_target_count = 4;
 		real_t x_priority = 1.0f, y_priority = 1.0f, z_priority = 1.0f;
@@ -611,30 +611,30 @@ public:
 		void disable();
 
 		/**
-         * Pins can be ultimate targets, or intermediary targets.
-         * By default, each pin is treated as an ultimate target, meaning
-         * any bones which are ancestors to that pin's end-effector
-         * are not aware of any pins wich are target of bones descending from that end effector.
+         * Targets can be ultimate targets, or intermediary targets.
+         * By default, each target is treated as an ultimate target, meaning
+         * any bones which are ancestors to that target's end-effector
+         * are not aware of any target wich are target of bones descending from that end effector.
          *
          * Changing this value makes ancestor bones aware, and also determines how much less
          * they care with each level down.
          *
-         * Presuming all descendants of this pin have a falloff of 1, then:
-         * A pin falloff of 0 on this pin means only this pin is reported to ancestors.
-         * A pin falloff of 1 on this pin means ancestors care about all descendant pins equally (after accounting for their pinWeight),
+         * Presuming all descendants of this target have a falloff of 1, then:
+         * A target falloff of 0 on this target means only this target is reported to ancestors.
+         * A target falloff of 1 on this target means ancestors care about all descendant target equally (after accounting for their pinWeight),
          * regardless of how many levels down they are.
-         * A pin falloff of 0.5 means each descendant pin is cared about half as much as its ancestor.
+         * A target falloff of 0.5 means each descendant target is cared about half as much as its ancestor.
          *
-         * With each level, the pin falloff of a descendant is taken account for each level.
-         *  Meaning, if this pin has a falloff of 1, and its descendent has a falloff of 0.5
-         *  then this pin will be reported with full weight,
+         * With each level, the target falloff of a descendant is taken account for each level.
+         *  Meaning, if this target has a falloff of 1, and its descendent has a falloff of 0.5
+         *  then this target will be reported with full weight,
          *  it descendant will be reported with full weight,
-         *  the descendant of that pin will be reported with half weight.
+         *  the descendant of that target will be reported with half weight.
          *  the desecendant of that one's descendant will be reported with quarter weight.
          *
-         * @param depth
+         * @param p_depth
          */
-		void set_depth_falloff(float depth);
+		void set_depth_falloff(float p_depth);
 
 		real_t get_depth_falloff() const;
 
@@ -646,9 +646,9 @@ public:
          *  This values this function sets are only considered by the orientation aware solver.
          *
          * @param position
-         * @param xPriority set to a positive value (recommended between 0 and 1) if you want the bone's x basis to point in the same direction as this target's x basis (by this library's convention the x basis corresponds to a limb's twist)
-         * @param yPriority set to a positive value (recommended between 0 and 1)  if you want the bone's y basis to point in the same direction as this target's y basis (by this library's convention the y basis corresponds to a limb's direction)
-         * @param zPriority set to a positive value (recommended between 0 and 1)  if you want the bone's z basis to point in the same direction as this target's z basis (by this library's convention the z basis corresponds to a limb's twist)
+         * @param p_x_priority set to a positive value (recommended between 0 and 1) if you want the bone's x basis to point in the same direction as this target's x basis (by this library's convention the x basis corresponds to a limb's twist)
+         * @param p_y_priority set to a positive value (recommended between 0 and 1)  if you want the bone's y basis to point in the same direction as this target's y basis (by this library's convention the y basis corresponds to a limb's direction)
+         * @param p_z_priority set to a positive value (recommended between 0 and 1)  if you want the bone's z basis to point in the same direction as this target's z basis (by this library's convention the z basis corresponds to a limb's twist)
          */
 		void set_target_priorities(float p_x_priority, float p_y_priority, float p_z_priority);
 
@@ -660,24 +660,24 @@ public:
 		uint8_t get_mode_code() const;
 
 		/**
-         * @return the priority of this pin's x axis;
+         * @return the priority of this target's x axis;
          */
 		real_t get_x_priority() const;
 
 		/**
-         * @return the priority of this pin's y axis;
+         * @return the priority of this target's y axis;
          */
 		real_t get_y_priority() const;
 
 		/**
-         * @return the priority of this pin's z axis;
+         * @return the priority of this target's z axis;
          */
 		real_t get_z_priority() const;
 
 		IKAxes get_axes() const;
 
 		/**
-         * translates and rotates the pin to match the position
+         * translates and rotates the target to match the position
          * and orientation of the input Axes. The orientation
          * is only relevant for orientation aware solvers.
          * @param inAxes
@@ -698,26 +698,26 @@ public:
 		void translate(Vector3 location);
 
 		/**
-         * @return the pin locationin global coordinates
+         * @return the target location in global coordinates
          */
 		Vector3 get_location();
 
 		Ref<ChainItem> for_bone();
 
 		/**
-         * called when this pin is being removed entirely from the Armature. (as opposed to just being disabled)
+         * called when this target is being removed entirely from the Armature. (as opposed to just being disabled)
          */
 		void removal_notification();
 
-		void set_parent_pin(ChainTarget *parent);
+		void set_parent_target(ChainTarget *parent);
 
-		void remove_child_pin(ChainTarget *child);
+		void remove_child_target(ChainTarget *child);
 
-		void add_child_pin(ChainTarget *newChild);
+		void add_child_target(ChainTarget *new_child);
 
-		ChainTarget *get_parent_pin();
+		ChainTarget *get_parent_target();
 
-		bool is_ancestor_of(ChainTarget *potentialDescendent);
+		bool is_ancestor_of(ChainTarget *potential_descendent);
 
 		real_t get_target_weight();
 	};

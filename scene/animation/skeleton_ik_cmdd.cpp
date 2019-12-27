@@ -868,8 +868,9 @@ void SkeletonIKCMDD::reload_chain() {
 	CMDDInverseKinematic::free_task(task);
 	task = NULL;
 
-	if (!skeleton)
+	if (!skeleton) {
 		return;
+	}
 
 	task = CMDDInverseKinematic::create_simple_task(skeleton, skeleton->find_bone(root_bone),
 			skeleton->find_bone(effector_bone), _get_target_transform(), -1, -1,
@@ -881,15 +882,17 @@ void SkeletonIKCMDD::reload_chain() {
 }
 
 void SkeletonIKCMDD::reload_goal() {
-	if (!task)
+	if (!task) {
 		return;
+	}
 
 	CMDDInverseKinematic::set_goal(task, _get_target_transform());
 }
 
 void SkeletonIKCMDD::_solve_chain() {
-	if (!task)
+	if (!task) {
 		return;
+	}
 	CMDDInverseKinematic::solve(task, interpolation, override_effector_basis, use_magnet, magnet_position);
 }
 
@@ -1253,11 +1256,11 @@ void QCP::set(PoolVector3Array p_moved, PoolVector3Array p_target, PoolRealArray
 	transformation_calculated = false;
 
 	if (p_translate) {
-		get_weighted_center(moved, p_weight, movedCenter);
+		get_weighted_center(moved, p_weight, moved_center);
 		wsum = 0.0f; //set wsum to 0 so we don't float up.
-		get_weighted_center(target, p_weight, targetCenter);
-		translate(movedCenter * -1.f, moved);
-		translate(targetCenter * -1.f, target);
+		get_weighted_center(target, p_weight, target_center);
+		translate(moved_center * -1.f, moved);
+		translate(target_center * -1.f, target);
 	} else {
 		if (!p_weight.empty()) {
 			for (int i = 0; i < p_weight.size(); i++) {
@@ -1562,7 +1565,7 @@ Vector3 QCP::get_weighted_center(PoolVector3Array p_to_center, PoolRealArray p_w
 }
 
 Vector3 QCP::get_translation() {
-	return targetCenter - movedCenter;
+	return target_center - moved_center;
 }
 
 void SkeletonIKConstraints::_bind_methods() {
@@ -1993,9 +1996,11 @@ IKAxes CMDDInverseKinematic::ChainTarget::get_axes() const {
 }
 
 void CMDDInverseKinematic::ChainTarget::align_to_axes(IKAxes inAxes) {
-	//TODO
-	// axes.alignGlobalsTo(inAxes);
-	//Rot rotation = new Rot(axes.x().heading(), axes.y().heading(), inAxes.x().heading(), inAxes.y().heading());
+		
+	IKAxes xform = chain_item->initial_transform;
+	xform.basis.rotate(xform.basis.get_rotation_quat());
+	xform.origin *= xform.origin;
+	chain_item->
 }
 
 void CMDDInverseKinematic::ChainTarget::translate_global(Vector3 location) {
@@ -2015,8 +2020,8 @@ Ref<CMDDInverseKinematic::ChainItem> CMDDInverseKinematic::ChainTarget::for_bone
 }
 
 void CMDDInverseKinematic::ChainTarget::removal_notification() {
-	for (int32_t target_i = 0; target_i < childPins.size(); target_i++) {
-		childPins.write[target_i]->set_parent_pin(get_parent_pin());
+	for (int32_t target_i = 0; target_i < child_targets.size(); target_i++) {
+		child_targets.write[target_i]->set_parent_target(get_parent_target());
 	}
 }
 
@@ -2202,42 +2207,42 @@ void IKConstraintKusudama::set_twist_limit(Ref<IKTwistLimit> p_axial_limit) {
 	emit_changed();
 }
 
-void CMDDInverseKinematic::ChainTarget::set_parent_pin(CMDDInverseKinematic::ChainTarget *parent) {
+void CMDDInverseKinematic::ChainTarget::set_parent_target(CMDDInverseKinematic::ChainTarget *parent) {
 	if (parent_target != NULL) {
-		parent_target->remove_child_pin(this);
+		parent_target->remove_child_target(this);
 	}
 	//set the parent to the global axes if the user
 	//tries to set the pin to be its own parent
 
 	if (parent != NULL) {
-		parent->add_child_pin(this);
+		parent->add_child_target(this);
 		parent_target = parent;
 	}
 }
 
-void CMDDInverseKinematic::ChainTarget::remove_child_pin(CMDDInverseKinematic::ChainTarget *child) {
-	int32_t target_i = childPins.find(child);
+void CMDDInverseKinematic::ChainTarget::remove_child_target(CMDDInverseKinematic::ChainTarget *child) {
+	int32_t target_i = child_targets.find(child);
 	if (target_i != -1) {
-		childPins.remove(target_i);
+		child_targets.remove(target_i);
 	}
 }
 
-void CMDDInverseKinematic::ChainTarget::add_child_pin(CMDDInverseKinematic::ChainTarget *newChild) {
+void CMDDInverseKinematic::ChainTarget::add_child_target(CMDDInverseKinematic::ChainTarget *newChild) {
 	if (newChild->is_ancestor_of(this)) {
-		set_parent_pin(newChild->get_parent_pin());
+		set_parent_target(newChild->get_parent_target());
 	}
-	if (childPins.find(newChild) != -1) {
-		childPins.push_back(newChild);
+	if (child_targets.find(newChild) != -1) {
+		child_targets.push_back(newChild);
 	}
 }
 
-CMDDInverseKinematic::ChainTarget *CMDDInverseKinematic::ChainTarget::get_parent_pin() {
+CMDDInverseKinematic::ChainTarget *CMDDInverseKinematic::ChainTarget::get_parent_target() {
 	return parent_target;
 }
 
 bool CMDDInverseKinematic::ChainTarget::is_ancestor_of(CMDDInverseKinematic::ChainTarget *potentialDescendent) {
 	bool result = false;
-	ChainTarget *cursor = potentialDescendent->get_parent_pin();
+	ChainTarget *cursor = potentialDescendent->get_parent_target();
 	while (cursor) {
 		if (cursor == this) {
 			result = true;
@@ -2250,7 +2255,7 @@ bool CMDDInverseKinematic::ChainTarget::is_ancestor_of(CMDDInverseKinematic::Cha
 }
 
 real_t CMDDInverseKinematic::ChainTarget::get_target_weight() {
-	return pin_weight;
+	return target_weight;
 }
 
 void CMDDInverseKinematic::ChainItem::populate_return_dampening_iteration_array(Ref<IKConstraintKusudama> k) {
