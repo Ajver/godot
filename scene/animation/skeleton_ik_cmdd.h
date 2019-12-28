@@ -146,6 +146,44 @@ protected:
 public:
 	~IKDirectionLimit() {
 	}
+
+	Vector3 get_on_great_tangent_triangle(Ref<IKDirectionLimit> next, Vector3 input) const;
+
+	/**
+	 * returns Vector3(0, 0, 0) if no rectification is required.
+	 * @param input
+	 * @param inBounds
+	 * @return
+	 */
+	Vector3 closest_to_cone(Vector3 input, Vector<bool> inBounds) const;
+
+	/**
+	 * returns Vector3(0, 0, 0) if no rectification is required.
+	 * @param next
+	 * @param input
+	 * @param inBounds
+	 * @return
+	 */
+	Vector3 closest_point_on_closest_cone(Ref<IKDirectionLimit> next, Vector3 input, Vector<bool> inBounds) const;
+
+	/**
+	 * 
+	 * @param next
+	 * @param input
+	 * @return Vector3(0, 0, 0) if the input point is already in bounds, or the point's rectified position
+	 * if the point was out of bounds. 
+	 */
+	Vector3 get_closest_collision(Ref<IKDirectionLimit> next, Vector3 input) const;
+
+	/**
+	 * 
+	 * @param next
+	 * @param input
+	 * @param collisionPoint will be set to the rectified (if necessary) position of the input after accounting for collisions
+	 * @return
+	 */
+	bool in_bounds_from_this_to_next(Ref<IKDirectionLimit> next, Vector3 input, Vector3 collisionPoint) const;
+
 	Vector3 control_point;
 	Vector3 radial_point;
 
@@ -157,7 +195,7 @@ public:
 
 	real_t get_radius() const;
 
-	real_t get_radius_cosine();
+	real_t get_radius_cosine() const;
 
 	Vector3 get_control_point() const;
 
@@ -519,31 +557,30 @@ public:
 		Ref<ChainItem> parent_item;
 
 		// Bone info
-		BoneId bone;
-		PhysicalBone *pb;
-		bool springy;
+		BoneId bone = -1;
+		PhysicalBone *pb = NULL;
+		bool springy = false;
 		real_t cos_half_dampen = 0.0f;
-		PoolRealArray cos_half_returnful_dampened;
-		PoolRealArray half_returnful_dampened;
+		PoolRealArray cos_half_returnful_dampened = PoolRealArray();
+		PoolRealArray half_returnful_dampened = PoolRealArray();
 		bool ik_orientation_lock = false;
 		real_t stiffness_scalar = 0.0f;
-
-		real_t length;
+		real_t bone_height = 0.0f;
+		real_t length = 0.0f;
 		// Positions relative to the root bone
-		Transform initial_transform;
+		Transform initial_transform = Transform();
 		// Position from this bone to the child
-		Vector3 current_pos;
+		Vector3 current_pos = Vector3();
 		// Direction from this bone to the child
-		Vector3 current_ori;
+		Vector3 current_ori = Vector3();
 
-		Ref<IKConstraintKusudama> constraint;
+		Ref<IKConstraintKusudama> constraint = NULL;
 
-		ChainItem() :
-				parent_item(NULL),
-				bone(-1),
-				pb(NULL),
-				springy(false),
-				length(0) {}
+		ChainItem() {}
+
+		real_t get_bone_height() const;
+
+		void set_bone_height(const real_t p_bone_height);
 
 		Ref<ChainItem> find_child(const BoneId p_bone_id);
 
@@ -917,7 +954,7 @@ private:
      * with the expectation that any directional limit in the array is connected to the directional limit at the previous element in the array,
      * and the directional limit at the next element in the array.
      */
-	Array direction_limits;
+	Vector<Ref<IKDirectionLimit> > direction_limits;
 
 	bool orientation_constrained = false;
 	bool axial_constrained = false;
@@ -1001,6 +1038,69 @@ public:
 	virtual real_t to_tau(real_t p_angle) const;
 
 	virtual real_t from_tau(real_t p_tau) const;
+
+	/**
+	 * Given a point (in global coordinates), checks to see if a ray can be extended from the Kusudama's
+	 * origin to that point, such that the ray in the Kusudama's reference frame is within the range allowed by the Kusudama's
+	 * coneLimits.
+	 * If such a ray exists, the original point is returned (the point is within the limits). 
+	 * If it cannot exist, the tip of the ray within the kusudama's limits that would require the least rotation
+	 * to arrive at the input point is returned.
+	 * @param inPoint the point to test.
+	 * @param returns a number from -1 to 1 representing the point's distance from the boundary, 0 means the point is right on 
+	 * the boundary, 1 means the point is within the boundary and on the path furthest from the boundary. any negative number means 
+	 * the point is outside of the boundary, but does not signify anything about how far from the boundary the point is.  
+	 * @return the original point, if it's in limits, or the closest point which is in limits.
+	 */
+	virtual Vector3 pointInLimits(Vector3 inPoint, Vector<real_t> inBounds, IKAxes limitingAxes) {
+
+		Vector3 point = inPoint;
+		//TODO
+		// limitingAxes.setToLocalOf(inPoint, point);
+		point.normalize();
+
+		inBounds.write[0] = -1;
+
+		Vector3 closestCollisionPoint;
+		float closestCos = -2.0f;
+		if (direction_limits.size() > 1 && orientation_constrained) {
+			for (int i = 0; i < direction_limits.size() - 1; i++) {
+				Vector3 collisionPoint;
+				Ref<IKDirectionLimit> nextCone = direction_limits[i + 1];
+				bool inSegBounds = direction_limits[i]->in_bounds_from_this_to_next(nextCone, point, collisionPoint);
+				if (inSegBounds == true) {
+					inBounds.write[0] = 1.0;
+				} else {
+					float thisCos = collisionPoint.dot(point);
+					if (closestCollisionPoint == Vector3() || thisCos > closestCos) {
+						closestCollisionPoint = collisionPoint;
+						closestCos = thisCos;
+					}
+				}
+			}
+			if (inBounds[0] == -1) {
+				//TODO
+				//return limitingAxes.getGlobalOf(closestCollisionPoint);
+				return closestCollisionPoint;
+			} else {
+				return inPoint;
+			}
+		} else if (orientation_constrained) {
+			if (point.dot(direction_limits[0]->get_control_point()) > direction_limits[0]->get_radius_cosine()) {
+				inBounds.write[0] = 1;
+				return inPoint;
+			} else {
+				Vector3 axis = direction_limits[0]->get_control_point().cross(point);
+				Quat toLimit = Quat(axis, direction_limits[0]->get_radius());
+				//TODO
+				//return limitingAxes.getGlobalOf(toLimit.applyToCopy(limitCones.get(0).getControlPoint()));
+				return direction_limits[0]->get_control_point();
+			}
+		} else {
+			inBounds.write[0] = 1.0f;
+			return inPoint;
+		}
+	}
 
 	virtual Vector3 point_on_path_sequence(IKAxes p_global_xform, Vector3 p_in_point, IKAxes p_limiting_axes);
 

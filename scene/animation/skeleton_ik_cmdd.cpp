@@ -160,15 +160,19 @@ void IKConstraintKusudama::optimize_limiting_axes() {
 	Ray newYRay = Ray(Vector3(0.0, 0.0, 0.0), newY);
 
 	//TODO
-	//	    Quat oldYtoNewY = Quat(limiting_axes.y_().heading(), original_limiting_axes.getGlobalOf(newYRay).heading());
-	//	    limiting_axes.rotate(oldYtoNewY);
-	//
-	//	    for (int32_t direction_limit_i =0 ; direction_limit_i < direction_limits.size(); direction_limit_i++) {
-	//	        Ref<IKDirectionLimit> direction_limit = direction_limits[direction_limit_i];
-	//	        original_limiting_axes.setToGlobalOf(direction_limit->get_center(), direction_limit->get_control_point().normalized());
-	//	        limiting_axes.setToLocalOf(direction_limit->get_center(), direction_limit->get_control_point().normalized());
-	//	        direction_limit->get_control_point().normalize();
-	//	    }
+	//Quat old_y_to_new_y = Quat(limiting_axes.y_().heading(), original_limiting_axes.getGlobalOf(newYRay).heading());
+	Transform xform;
+	xform.basis = original_limiting_axes.get_basis();
+	Quat old_y_to_new_y = limiting_axes.get_basis() * xform.get_basis();
+	limiting_axes.basis.rotate(old_y_to_new_y);
+
+	for (int32_t direction_limit_i = 0; direction_limit_i < direction_limits.size(); direction_limit_i++) {
+		Ref<IKDirectionLimit> direction_limit = direction_limits[direction_limit_i];
+		// TODO
+		// original_limiting_axes.setToGlobalOf(direction_limit->get_control_point(), direction_limit->get_control_point().normalized());
+		// limiting_axes.setToLocalOf(direction_limit->get_control_point(), direction_limit->get_control_point().normalized());
+		direction_limit->get_control_point().normalize();
+	}
 	update_tangent_radii();
 }
 
@@ -196,7 +200,7 @@ IKConstraintKusudama::create_direction_limit_for_index(int p_insert_at, Vector3 
 	Ref<IKDirectionLimit> direction_limit;
 	direction_limit.instance();
 	direction_limit->initialize(p_new_point, p_radius, this);
-	direction_limits[p_insert_at] = direction_limit;
+	direction_limits.write[p_insert_at] = direction_limit;
 	return direction_limit;
 }
 
@@ -1048,7 +1052,7 @@ Vector3 IKDirectionLimit::get_control_point() const {
 	return control_point;
 }
 
-real_t IKDirectionLimit::get_radius_cosine() {
+real_t IKDirectionLimit::get_radius_cosine() const {
 	return radius_cosine;
 }
 
@@ -1121,7 +1125,7 @@ void IKDirectionLimit::compute_triangles(Ref<IKDirectionLimit> p_next) {
 void IKDirectionLimit::set_control_point(Vector3 p_control_point) {
 	control_point = p_control_point;
 	if (parent_kusudama.is_valid()) {
-		//	parent_kusudama->constraint_update_notification();
+		parent_kusudama->constraint_update_notification();
 	}
 }
 
@@ -1132,6 +1136,112 @@ void IKDirectionLimit::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_control_point"), &IKDirectionLimit::get_control_point);
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "radius"), "set_radius", "get_radius");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "control_point"), "set_control_point", "get_control_point");
+}
+
+Vector3 IKDirectionLimit::get_on_great_tangent_triangle(Ref<IKDirectionLimit> next, Vector3 input) const {
+	Vector3 c1xc2 = get_control_point().cross(next->get_control_point());
+	float c1c2fir = input.dot(c1xc2);
+	if (c1c2fir < 0.0) {
+		Vector3 c1xt1 = get_control_point().cross(tangent_circle_center_next_1);
+		Vector3 t1xc2 = tangent_circle_center_next_1.cross(next->get_control_point());
+		if (input.dot(c1xt1) > 0 && input.dot(t1xc2) > 0) {
+			if (input.dot(tangent_circle_center_next_1) > tangent_circle_radius_next_cos) {
+				Vector3 planeNormal = tangent_circle_center_next_1.cross(input);
+				Quat rotateAboutBy = Quat(planeNormal, tangent_circle_radius_next);
+				Transform xform;
+				xform.basis = Basis(rotateAboutBy);
+				return xform.xform(tangent_circle_center_next_1);
+			} else {
+				return input;
+			}
+		} else {
+			return Vector3();
+		}
+	} else {
+		Vector3 t2xc1 = tangent_circle_center_next_2.cross(get_control_point());
+		Vector3 c2xt2 = next->get_control_point().cross(tangent_circle_center_next_2);
+		if (input.dot(t2xc1) > 0 && input.dot(c2xt2) > 0) {
+			if (input.dot(tangent_circle_center_next_2) > tangent_circle_radius_next_cos) {
+				Vector3 planeNormal = tangent_circle_center_next_2.cross(input);
+				Quat rotateAboutBy = Quat(planeNormal, tangent_circle_radius_next);
+				Transform xform;
+				xform.basis = Basis(rotateAboutBy);
+				return xform.xform(tangent_circle_center_next_2);
+			} else {
+				return input;
+			}
+		} else {
+			return Vector3();
+		}
+	}
+}
+
+Vector3 IKDirectionLimit::closest_to_cone(Vector3 input, Vector<bool> inBounds) const {
+
+	if (input.dot(get_control_point()) > get_radius_cosine()) {
+		inBounds.write[0] = true;
+		return Vector3();
+	} else {
+		Vector3 axis = get_control_point().cross(input);
+		Quat rotTo = Quat(axis, get_radius());
+		Transform xform;
+		xform.basis = Basis(rotTo);
+		Vector3 result = xform.xform(get_control_point());
+		inBounds.write[0] = false;
+		return result;
+	}
+}
+
+Vector3
+IKDirectionLimit::closest_point_on_closest_cone(Ref<IKDirectionLimit> next, Vector3 input, Vector<bool> inBounds) const {
+	Vector3 closestToFirst = closest_to_cone(input, inBounds);
+	if (inBounds[0]) {
+		return closestToFirst;
+	}
+	Vector3 closestToSecond = next->closest_to_cone(input, inBounds);
+	if (inBounds[0]) {
+		return closestToSecond;
+	}
+
+	float cosToFirst = input.dot(closestToFirst);
+	float cosToSecond = input.dot(closestToSecond);
+
+	if (cosToFirst > cosToSecond) {
+		return closestToFirst;
+	} else {
+		return closestToSecond;
+	}
+}
+
+Vector3 IKDirectionLimit::get_closest_collision(Ref<IKDirectionLimit> next, Vector3 input) const {
+	Vector3 result = get_on_great_tangent_triangle(next, input);
+	if (result == Vector3()) {
+		Vector<bool> inBounds;
+		inBounds.resize(1);
+		inBounds.write[0] = false;
+		result = closest_point_on_closest_cone(next, input, inBounds);
+	}
+	return result;
+}
+
+bool IKDirectionLimit::in_bounds_from_this_to_next(Ref<IKDirectionLimit> next, Vector3 input, Vector3 collisionPoint) const {
+	bool isInBounds = false;
+	Vector3 closestCollision = get_closest_collision(next, input);
+	if (closestCollision == Vector3()) {
+		/**
+         * getClosestCollision returns null if the point is already in bounds,
+         * so we set isInBounds to true.
+         */
+		isInBounds = true;
+		collisionPoint.x = input.x;
+		collisionPoint.y = input.y;
+		collisionPoint.z = input.z;
+	} else {
+		collisionPoint.x = closestCollision.x;
+		collisionPoint.y = closestCollision.y;
+		collisionPoint.z = closestCollision.z;
+	}
+	return isInBounds;
 }
 
 void IKAxes::operator=(const IKAxes &p_axes) {
@@ -1707,9 +1817,10 @@ void IKConstraintKusudama::set_axes_to_orientation_snap(IKAxes p_to_set, IKAxes 
 	Vector<real_t> inBounds;
 	inBounds.push_back(1.f);
 	bone_ray.position = Vector3(p_to_set.origin);
-	//TODO
-	// bone_ray.normal = toSet.origin.y * attached_to->boneHeight;
-	// Vector3 inLimits = pointInLimits(bone_ray.normal, inBounds, limitingAxes);
+
+	// toSet.y_().getScaledTo(attachedTo.boneHeight);
+	bone_ray.normal = p_to_set.basis.get_axis(CMDDInverseKinematic::y_axis) * attached_to->get_bone_height();
+	Vector3 in_limits = pointInLimits(bone_ray.normal, inBounds, limiting_axes);
 
 	// if (inBounds[0] == -1 && inLimits != Vector3()) {
 	// 	constrained_ray.position = bone_ray.position;
@@ -1996,11 +2107,8 @@ IKAxes CMDDInverseKinematic::ChainTarget::get_axes() const {
 }
 
 void CMDDInverseKinematic::ChainTarget::align_to_axes(IKAxes inAxes) {
-		
-	IKAxes xform = chain_item->initial_transform;
-	xform.basis.rotate(xform.basis.get_rotation_quat());
-	xform.origin *= xform.origin;
-	chain_item->
+	//TODO
+	//axes.alignGlobalsTo(inAxes);
 }
 
 void CMDDInverseKinematic::ChainTarget::translate_global(Vector3 location) {
@@ -2052,7 +2160,7 @@ bool IKConstraintKusudama::_set(const StringName &p_name, const Variant &p_value
 				Ref<IKDirectionLimit> direction_limit;
 				direction_limit.instance();
 				direction_limit->initialize(Vector3(), 0.0f, this);
-				direction_limits[direction_limit_i] = direction_limit;
+				direction_limits.write[direction_limit_i] = direction_limit;
 			}
 		}
 		_change_notify();
@@ -2276,4 +2384,12 @@ void CMDDInverseKinematic::ChainItem::populate_return_dampening_iteration_array(
 		half_returnful_dampened.write()[iter_i] = iteration_return_clamp;
 		cos_half_returnful_dampened.write()[iter_i] = cos_iteration_return_clamp;
 	}
+}
+
+real_t CMDDInverseKinematic::ChainItem::get_bone_height() const {
+	return bone_height;
+}
+
+void CMDDInverseKinematic::ChainItem::set_bone_height(const real_t p_bone_height) {
+	bone_height = p_bone_height;
 }
