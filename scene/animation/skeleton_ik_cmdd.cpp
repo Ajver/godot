@@ -45,7 +45,6 @@ void CMDDInverseKinematic::QCPSolver(
 		Ref<ChainItem> stop_after = &p_chain->chain_root;
 
 		Ref<ChainItem> current_bone = start_from;
-
 		//if the tip is pinned, it should have already been oriented before this function was called.
 		while (current_bone.is_valid() && current_bone != stop_after) {
 			if (!current_bone->ik_orientation_lock) {
@@ -298,6 +297,8 @@ bool CMDDInverseKinematic::build_chain(Task *p_task, bool p_force_simple_chain) 
 		chain->constraints->_change_notify();
 	}
 
+	chain->create_headings_arrays();
+
 	return true;
 }
 
@@ -471,6 +472,9 @@ void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(Ref<CMD
 	Quat orientiation;
 	orientiation.set_euler(p_chain_item->current_ori);
 	xform.basis = Basis(orientiation);
+	if (p_chain_item->constraint.is_null()) {
+		return;
+	}
 	p_chain_item->set_axes_to_be_snapped(xform, p_chain_item->constraint->get_limiting_axes(), bone_damp);
 	xform.origin = p_chain_item->current_pos;
 	p_chain_item->constraint->set_limiting_axes(p_chain_item->constraint->get_limiting_axes().translated(translate_by));
@@ -594,6 +598,9 @@ void CMDDInverseKinematic::update_target_headings(Ref<Chain> r_chain, PoolVector
 	int hdx = 0;
 	for (int target_i = 0; target_i < r_chain->targets.size(); target_i++) {
 		Ref<ChainItem> sb = r_chain->targets[target_i]->chain_item;
+		if (sb->constraint.is_null()) {
+			continue;
+		}
 		IKAxes targetAxes = sb->constraint->get_limiting_axes();
 		Vector3 origin = sb->current_pos;
 		r_localized_target_headings[hdx] = targetAxes.origin - origin;
@@ -628,13 +635,14 @@ void CMDDInverseKinematic::update_target_headings(Ref<Chain> r_chain, PoolVector
 
 void CMDDInverseKinematic::update_effector_headings(Ref<Chain> r_chain, PoolVector3Array &r_localized_effector_headings,
 		Transform p_bone_xform) {
+
 	int hdx = 0;
 	for (int target_i = 0; target_i < r_chain->targets.size(); target_i++) {
 		Ref<ChainItem> sb = r_chain->targets[target_i]->chain_item;
 		IKAxes effector = r_chain->targets[target_i]->end_effector->goal_transform;
 		// tipAxes.updateGlobal();
 		Vector3 origin = sb->current_pos;
-		r_localized_effector_headings[hdx] = effector.origin - origin;
+		r_localized_effector_headings.write()[hdx] = effector.origin - origin;
 		uint8_t modeCode = r_chain->targets[target_i]->get_mode_code();
 		hdx++;
 
@@ -643,7 +651,7 @@ void CMDDInverseKinematic::update_effector_headings(Ref<Chain> r_chain, PoolVect
 			xEffector.normal = Vector3(1, 0, 0);
 			xEffector.position = xEffector.normal * effector.basis.get_axis(x_axis);
 
-			r_localized_effector_headings[hdx] = xEffector.position - origin;
+			r_localized_effector_headings.write()[hdx] = xEffector.position - origin;
 			// xTip.setToInvertedTip(r_localized_effector_headings[hdx+1]).sub(origin);
 			hdx += 2;
 		}
@@ -653,7 +661,7 @@ void CMDDInverseKinematic::update_effector_headings(Ref<Chain> r_chain, PoolVect
 			yEffector.normal = Vector3(0, 1, 0);
 			yEffector.position = yEffector.normal * effector.basis.get_axis(y_axis);
 
-			r_localized_effector_headings[hdx] = yEffector.position - origin;
+			r_localized_effector_headings.write()[hdx] = yEffector.position - origin;
 			// yEffector.setToInvertedTip(r_localized_effector_headings[hdx+1]).sub(origin);
 			hdx += 2;
 		}
@@ -663,7 +671,7 @@ void CMDDInverseKinematic::update_effector_headings(Ref<Chain> r_chain, PoolVect
 			zEffector.normal = Vector3(0, 0, 1);
 			zEffector.position = zEffector.normal * effector.basis.get_axis(z_axis);
 
-			r_localized_effector_headings[hdx] = zEffector.position - origin;
+			r_localized_effector_headings.write()[hdx] = zEffector.position - origin;
 			// zEffector.setToInvertedTip(r_localized_effector_headings[hdx+1]).sub(origin);
 			hdx += 2;
 		}
@@ -1112,6 +1120,7 @@ Vector3 IKDirectionLimit::get_on_path_sequence(Ref<IKDirectionLimit> p_next, Vec
 
 void IKDirectionLimit::compute_triangles(Ref<IKDirectionLimit> p_next) {
 	first_triangle_next.resize(3);
+	//TODO Move normalization outside
 	first_triangle_next.write[1] = tangent_circle_center_next_1.normalized();
 	first_triangle_next.write[0] = get_control_point().normalized();
 	first_triangle_next.write[2] = p_next->get_control_point().normalized();
@@ -1124,9 +1133,10 @@ void IKDirectionLimit::compute_triangles(Ref<IKDirectionLimit> p_next) {
 
 void IKDirectionLimit::set_control_point(Vector3 p_control_point) {
 	control_point = p_control_point;
-	if (parent_kusudama.is_valid()) {
-		parent_kusudama->constraint_update_notification();
-	}
+	//TODO
+	// if (parent_kusudama.is_valid()) {
+	// 	parent_kusudama->constraint_update_notification();
+	// }
 }
 
 void IKDirectionLimit::_bind_methods() {
@@ -2191,7 +2201,7 @@ void CMDDInverseKinematic::ChainItem::rootwardly_update_falloff_cache_from(Ref<C
 }
 
 void CMDDInverseKinematic::Chain::recursively_create_penalty_array(Ref<CMDDInverseKinematic::Chain> from,
-		Vector<Vector<real_t> > weight_array,
+		Vector<Vector<real_t> > &r_weight_array,
 		Vector<Ref<CMDDInverseKinematic::ChainItem> >
 
 				pin_sequence,
@@ -2233,10 +2243,10 @@ void CMDDInverseKinematic::Chain::recursively_create_penalty_array(Ref<CMDDInver
 					inner_weight_array.push_back(sub_target_weight);
 				}
 				pin_sequence.push_back(target->for_bone());
-				weight_array.push_back(inner_weight_array);
+				r_weight_array.push_back(inner_weight_array);
 			}
 			real_t this_falloff = target.is_null() ? 1.0f : target->get_depth_falloff();
-			recursively_create_penalty_array(this, weight_array, pin_sequence, current_falloff * this_falloff);
+			recursively_create_penalty_array(this, r_weight_array, pin_sequence, current_falloff * this_falloff);
 		}
 	}
 }

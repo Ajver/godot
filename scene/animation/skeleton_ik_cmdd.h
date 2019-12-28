@@ -776,7 +776,7 @@ public:
 		int ik_iterations = 15;
 
 		int get_default_iterations() const;
-		void recursively_create_penalty_array(Ref<Chain> from, Vector<Vector<real_t> > weight_array, Vector<Ref<ChainItem> > pin_sequence, real_t current_falloff);
+		void recursively_create_penalty_array(Ref<Chain> from, Vector<Vector<real_t> > &r_weight_array, Vector<Ref<ChainItem> > pin_sequence, real_t current_falloff);
 		void create_headings_arrays();
 	};
 
