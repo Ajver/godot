@@ -552,7 +552,7 @@ public:
 
 	public:
 		Ref<Chain> parent_armature;
-
+		
 		Vector<Ref<ChainItem> > children;
 		Ref<ChainItem> parent_item;
 
@@ -567,16 +567,22 @@ public:
 		real_t stiffness_scalar = 0.0f;
 		real_t bone_height = 0.0f;
 		real_t length = 0.0f;
-		// Positions relative to the root bone
-		Transform initial_transform = Transform();
-		// Position from this bone to the child
-		Vector3 current_pos = Vector3();
-		// Direction from this bone to the child
-		Vector3 current_ori = Vector3();
+
+		Transform local_transform = Transform();
 
 		Ref<IKConstraintKusudama> constraint = NULL;
 
 		ChainItem() {}
+
+		Transform get_global_transform() const {
+			Transform xform;
+			Ref<ChainItem> item = parent_item;
+			while (item.is_valid()) {
+				xform = item->local_transform * xform;
+				item = item->parent_item;
+			}
+			return xform;
+		}
 
 		real_t get_bone_height() const;
 
