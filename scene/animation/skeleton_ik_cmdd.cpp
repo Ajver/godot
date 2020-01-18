@@ -275,9 +275,9 @@ bool CMDDInverseKinematic::build_chain(Task *p_task, bool p_force_simple_chain) 
 		chain->targets.write[x]->chain_item = sub_chain;
 		chain->targets.write[x]->end_effector = ee;
 
-		print_line("Bone " + p_task->skeleton->get_bone_name(chain->targets.write[x]->chain_item->bone));
-		print_line("Bone local location " + chain->targets.write[x]->chain_item->local_transform.origin);
-		print_line("Bone global location " + p_task->skeleton->get_bone_global_pose(chain->targets.write[x]->chain_item->bone).origin);
+		print_verbose("IK build chain bone " + p_task->skeleton->get_bone_name(chain->targets.write[x]->chain_item->bone));
+		print_verbose("IK build chain bone local location " + chain->targets.write[x]->chain_item->local_transform.origin);
+		print_verbose("IK build chain bone global location " + p_task->skeleton->get_bone_global_pose(chain->targets.write[x]->chain_item->bone).origin);
 
 		// Allow multieffector
 		// if (p_force_simple_chain) {
@@ -375,9 +375,9 @@ void CMDDInverseKinematic::make_goal(Task *p_task, const Transform &p_inverse_tr
 		// End effector in local transform
 		const Transform end_effector_pose(
 				p_task->skeleton->get_bone_rest(p_task->end_effectors.write[0]->effector_bone) * p_task->skeleton->get_bone_pose(p_task->end_effectors.write[0]->effector_bone));
-		// print_line("Bone " + p_task->skeleton->get_bone_name(p_task->end_effectors.write[0]->effector_bone));
-		// print_line("Bone local location " + end_effector_pose.origin);
-		// print_line("Bone global location " + p_task->skeleton->get_bone_global_pose(p_task->end_effectors.write[0]->effector_bone).origin);
+		print_verbose("IK make goal bone " + p_task->skeleton->get_bone_name(p_task->end_effectors.write[0]->effector_bone));
+		print_verbose("IK make goal bone local location " + end_effector_pose.origin);
+		print_verbose("IK make goal bone global location " + p_task->skeleton->get_bone_global_pose(p_task->end_effectors.write[0]->effector_bone).origin);
 		// Update the end_effector (local transform) by blending with current pose
 		p_task->end_effectors.write[0]
 				->goal_transform = end_effector_pose.interpolate_with(
@@ -396,10 +396,13 @@ void CMDDInverseKinematic::solve(Task *p_task, real_t blending_delta, bool overr
 
 	update_chain(p_task->skeleton, &p_task->chain->chain_root);
 
-	print_line("CMDDInverseKinematic::solve Bone " + p_task->skeleton->get_bone_name(p_task->end_effectors[0]->effector_bone));
+	print_verbose("IK solve bone " + p_task->skeleton->get_bone_name(p_task->end_effectors[0]->effector_bone));
+	print_verbose("IK solve bone goal local location " + p_task->end_effectors[0]->goal_transform.origin);
 	Ref<ChainItem> effector_chain_item = p_task->chain->chain_root.find_child(p_task->end_effectors[0]->effector_bone);
-	print_line("CMDDInverseKinematic::solve Bone local location " + effector_chain_item->local_transform.origin);
-	print_line("CMDDInverseKinematic::solve Bone global location " + p_task->skeleton->get_bone_global_pose(effector_chain_item->bone).origin);
+	if (effector_chain_item.is_valid()) {
+		print_verbose("IK solve bone local location " + effector_chain_item->local_transform.origin);
+		print_verbose("IK solve bone global location " + p_task->skeleton->get_bone_global_pose(effector_chain_item->bone).origin);
+	}
 
 	// if (p_use_magnet && p_task->chain->middle_chain_item.is_valid()) {
 	// 	p_task->chain->magnet_position = p_task->chain->middle_chain_item->get_global_transform().origin.linear_interpolate(
