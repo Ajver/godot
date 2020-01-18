@@ -552,7 +552,7 @@ public:
 
 	public:
 		Ref<Chain> parent_armature;
-		
+
 		Vector<Ref<ChainItem> > children;
 		Ref<ChainItem> parent_item;
 
@@ -765,6 +765,7 @@ public:
 		real_t get_target_weight();
 	};
 
+	//
 	struct Chain : public Reference {
 		GDCLASS(Chain, Reference);
 
@@ -814,8 +815,8 @@ public:
 				skeleton(NULL),
 				min_distance(0.01),
 				iterations(4),
-				max_iterations(10),
-				dampening(-1),
+				max_iterations(1),
+				dampening(0.05),
 				stabilizing_passes(-1),
 				root_bone(-1) {
 			chain.instance();
