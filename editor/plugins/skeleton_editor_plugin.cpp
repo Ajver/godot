@@ -32,6 +32,8 @@
 
 #include "core/io/resource_saver.h"
 #include "editor/editor_file_dialog.h"
+#include "editor/editor_properties.h"
+#include "editor/editor_scale.h"
 #include "editor/plugins/animation_player_editor_plugin.h"
 #include "scene/3d/collision_shape.h"
 #include "scene/3d/physics_body.h"
@@ -680,8 +682,7 @@ void SkeletonEditor::_notification(int p_what) {
 			create_editors();
 			update_joint_tree();
 			update_editors();
-
-			get_tree()->connect("node_removed", this, "_node_removed");
+			get_tree()->connect("node_removed", this, "_node_removed", Vector<Variant>(), Object::CONNECT_ONESHOT);
 			file_dialog->connect("file_selected", this, "_file_selected");
 			joint_tree->connect("item_selected", this, "_joint_tree_selection_changed");
 			joint_tree->connect("item_rmb_selected", this, "_joint_tree_rmb_select");
