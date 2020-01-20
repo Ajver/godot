@@ -249,7 +249,10 @@ bool CMDDInverseKinematic::build_chain(Task *p_task, bool p_force_simple_chain) 
 				child_ci = sub_chain->add_child(chain_ids[i]);
 
 				child_ci->pb = p_task->skeleton->get_physical_bone(child_ci->bone);
-
+				if (child_ci->parent_item.is_valid()) {
+					child_ci->transform->parent = child_ci->parent_item->transform;
+					child_ci->parent_item->children.push_back(child_ci->transform);
+				}
 				child_ci->transform->local_transform = p_task->skeleton->get_bone_rest(child_ci->bone) * p_task->skeleton->get_bone_pose(child_ci->bone);
 
 				if (child_ci->parent_item.is_valid()) {
