@@ -546,6 +546,38 @@ public:
 	};
 	struct Chain;
 
+	
+	class Axes : public Reference {
+	public:
+		Transform local_transform;
+		Transform global_transform;
+		bool dirty = false;
+		Ref<Axes> parent;
+		Vector<Ref<Axes> > children;
+		void mark_dirty() {
+			dirty = true;
+			for (int32_t i = 0; i < children.size(); i++) {
+				children.write[i]->mark_dirty();
+			}
+		}
+		bool is_dirty() const {
+			return dirty;
+		}
+		void update_global_transform() {
+			if (parent.is_valid()) {
+				global_transform = parent->get_global_transform() * local_transform;
+			} else {
+				global_transform = local_transform;
+			}
+		}
+		Transform get_global_transform() {
+			if (is_dirty()) {
+				update_global_transform();
+			}
+			return global_transform;
+		}
+	};
+
 	struct ChainItem : Reference {
 
 		GDCLASS(ChainItem, Reference);
@@ -568,17 +600,17 @@ public:
 		real_t bone_height = 0.0f;
 		real_t length = 0.0f;
 
-		Transform local_transform = Transform();
+		Ref<Axes> transform;
 
 		Ref<IKConstraintKusudama> constraint = NULL;
 
-		ChainItem() {}
+		ChainItem() { transform.instance(); }
 
 		Transform get_global_transform() const {
 			Transform xform;
 			Ref<ChainItem> item = parent_item;
 			while (item.is_valid()) {
-				xform = item->local_transform * xform;
+				xform = item->transform->local_transform * xform;
 				item = item->parent_item;
 			}
 			return xform;

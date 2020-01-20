@@ -210,7 +210,7 @@ bool CMDDInverseKinematic::build_chain(Task *p_task, bool p_force_simple_chain) 
 	Ref<Chain> chain = p_task->chain;
 	chain->targets.resize(p_task->end_effectors.size());
 	chain->chain_root.bone = p_task->root_bone;
-	chain->chain_root.local_transform = p_task->skeleton->get_bone_rest(chain->chain_root.bone) * p_task->skeleton->get_bone_pose(chain->chain_root.bone);
+	chain->chain_root.transform->local_transform = p_task->skeleton->get_bone_rest(chain->chain_root.bone) * p_task->skeleton->get_bone_pose(chain->chain_root.bone);
 	chain->chain_root.pb = p_task->skeleton->get_physical_bone(chain->chain_root.bone);
 	chain->middle_chain_item = Ref<ChainItem>();
 
@@ -250,10 +250,10 @@ bool CMDDInverseKinematic::build_chain(Task *p_task, bool p_force_simple_chain) 
 
 				child_ci->pb = p_task->skeleton->get_physical_bone(child_ci->bone);
 
-				child_ci->local_transform = p_task->skeleton->get_bone_rest(child_ci->bone) * p_task->skeleton->get_bone_pose(child_ci->bone);
+				child_ci->transform->local_transform = p_task->skeleton->get_bone_rest(child_ci->bone) * p_task->skeleton->get_bone_pose(child_ci->bone);
 
 				if (child_ci->parent_item.is_valid()) {
-					child_ci->length = (child_ci->local_transform.origin - child_ci->parent_item->local_transform.origin).length();
+					child_ci->length = (child_ci->transform->local_transform.origin - child_ci->parent_item->transform->local_transform.origin).length();
 				}
 			}
 
@@ -276,7 +276,7 @@ bool CMDDInverseKinematic::build_chain(Task *p_task, bool p_force_simple_chain) 
 		chain->targets.write[x]->end_effector = ee;
 
 		print_verbose("IK build chain bone " + p_task->skeleton->get_bone_name(chain->targets.write[x]->chain_item->bone));
-		print_verbose("IK build chain bone local location " + chain->targets.write[x]->chain_item->local_transform.origin);
+		print_verbose("IK build chain bone local location " + chain->targets.write[x]->chain_item->transform->local_transform.origin);
 		print_verbose("IK build chain bone global location " + p_task->skeleton->get_bone_global_pose(chain->targets.write[x]->chain_item->bone).origin);
 
 		// Allow multieffector
@@ -308,7 +308,7 @@ void CMDDInverseKinematic::update_chain(const Skeleton *p_sk, Ref<ChainItem> p_c
 
 	if (p_chain_item.is_null())
 		return;
-	p_chain_item->local_transform =
+	p_chain_item->transform->local_transform =
 			p_sk->get_bone_rest(p_chain_item->bone) * p_sk->get_bone_pose(p_chain_item->bone);
 
 	for (int i = p_chain_item->children.size() - 1; 0 <= i; --i) {
@@ -400,7 +400,7 @@ void CMDDInverseKinematic::solve(Task *p_task, real_t blending_delta, bool overr
 	print_verbose("IK solve bone goal local location " + p_task->end_effectors[0]->goal_transform.origin);
 	Ref<ChainItem> effector_chain_item = p_task->chain->chain_root.find_child(p_task->end_effectors[0]->effector_bone);
 	if (effector_chain_item.is_valid()) {
-		print_verbose("IK solve bone local location " + effector_chain_item->local_transform.origin);
+		print_verbose("IK solve bone local location " + effector_chain_item->transform->local_transform.origin);
 		print_verbose("IK solve bone global location " + p_task->skeleton->get_bone_global_pose(effector_chain_item->bone).origin);
 	}
 
@@ -415,17 +415,17 @@ void CMDDInverseKinematic::solve(Task *p_task, real_t blending_delta, bool overr
 	Ref<ChainItem> ci(&p_task->chain->chain_root);
 	while (ci.is_valid()) {
 		Transform new_bone_pose(ci->get_global_transform());
-		new_bone_pose.origin = ci->local_transform.origin;
+		new_bone_pose.origin = ci->transform->local_transform.origin;
 
 		if (!ci->children.empty()) {
 
 			/// Rotate basis
 			const Vector3 initial_ori(
 					(ci->children[0]->get_global_transform().origin - ci->get_global_transform().origin).normalized());
-			const Vector3 rot_axis(initial_ori.cross(ci->local_transform.get_basis().get_rotation_euler()).normalized());
+			const Vector3 rot_axis(initial_ori.cross(ci->transform->local_transform.get_basis().get_rotation_euler()).normalized());
 
 			if (rot_axis[0] != 0 && rot_axis[1] != 0 && rot_axis[2] != 0) {
-				const real_t rot_angle(Math::acos(CLAMP(initial_ori.dot(ci->local_transform.get_basis().get_rotation_euler()), -1, 1)));
+				const real_t rot_angle(Math::acos(CLAMP(initial_ori.dot(ci->transform->local_transform.get_basis().get_rotation_euler()), -1, 1)));
 				new_bone_pose.basis.rotate(rot_axis, rot_angle);
 			}
 		} else {
@@ -478,15 +478,15 @@ void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(Ref<CMD
 	} else {
 		qcp_rot.clamp_to_quadrance_angle(bone_damp);
 	}
-	p_chain_item->local_transform.origin *= translate_by;
-	p_chain_item->local_transform.basis *= Basis(qcp_rot);
+	p_chain_item->transform->local_transform.origin *= translate_by;
+	p_chain_item->transform->local_transform.basis *= Basis(qcp_rot);
 	IKAxes xform;
-	xform.basis = p_chain_item->local_transform.get_basis();
+	xform.basis = p_chain_item->transform->local_transform.get_basis();
 	if (p_chain_item->constraint.is_null()) {
 		return;
 	}
 	p_chain_item->set_axes_to_be_snapped(xform, p_chain_item->constraint->get_limiting_axes(), bone_damp);
-	xform.origin = p_chain_item->local_transform.origin;
+	xform.origin = p_chain_item->transform->local_transform.origin;
 	p_chain_item->constraint->set_limiting_axes(p_chain_item->constraint->get_limiting_axes().translated(translate_by));
 }
 
@@ -506,7 +506,7 @@ void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(Ref<CMD
 		return;
 	}
 
-	Quat best_orientation = p_for_bone->local_transform.get_basis().get_rotation_quat();
+	Quat best_orientation = p_for_bone->transform->local_transform.get_basis().get_rotation_quat();
 	float new_dampening = -1;
 	if (p_for_bone->parent_item == NULL)
 		p_stabilization_passes = 0;
@@ -514,7 +514,7 @@ void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(Ref<CMD
 		new_dampening = Math_PI;
 	}
 	IKAxes bone_xform;
-	Quat quat = p_for_bone->local_transform.basis.get_rotation_quat();
+	Quat quat = p_for_bone->transform->local_transform.basis.get_rotation_quat();
 	bone_xform.basis = Basis(quat);
 	update_target_headings(r_chain, r_chain->localized_target_headings, r_chain->weights, bone_xform);
 	update_effector_headings(r_chain, r_chain->localized_effector_headings, bone_xform);
@@ -577,8 +577,8 @@ void CMDDInverseKinematic::update_optimal_rotation_to_target_descendants(Ref<CMD
 	}
 	if (p_stabilization_passes > 0) {
 		bone_xform.basis = Basis(best_orientation);
-		p_for_bone->local_transform.origin = bone_xform.origin;
-		p_for_bone->local_transform.basis = bone_xform.basis;
+		p_for_bone->transform->local_transform.origin = bone_xform.origin;
+		p_for_bone->transform->local_transform.basis = bone_xform.basis;
 	}
 }
 
@@ -609,7 +609,7 @@ void CMDDInverseKinematic::update_target_headings(Ref<Chain> r_chain, PoolVector
 			continue;
 		}
 		IKAxes targetAxes = sb->constraint->get_limiting_axes();
-		Vector3 origin = sb->local_transform.origin;
+		Vector3 origin = sb->transform->local_transform.origin;
 		r_localized_target_headings[hdx] = targetAxes.origin - origin;
 		uint8_t modeCode = r_chain->targets[target_i]->get_mode_code();
 		hdx++;
@@ -648,7 +648,7 @@ void CMDDInverseKinematic::update_effector_headings(Ref<Chain> r_chain, PoolVect
 		Ref<ChainItem> sb = r_chain->targets[target_i]->chain_item;
 		IKAxes effector = r_chain->targets[target_i]->end_effector->goal_transform;
 		// tipAxes.updateGlobal();
-		Vector3 origin = sb->local_transform.origin;
+		Vector3 origin = sb->transform->local_transform.origin;
 		r_localized_effector_headings.write()[hdx] = effector.origin - origin;
 		uint8_t modeCode = r_chain->targets[target_i]->get_mode_code();
 		hdx++;
@@ -2119,7 +2119,7 @@ real_t CMDDInverseKinematic::ChainTarget::get_z_priority() const {
 }
 
 IKAxes CMDDInverseKinematic::ChainTarget::get_axes() const {
-	return IKAxes(chain_item->local_transform.basis, chain_item->local_transform.origin);
+	return IKAxes(chain_item->transform->local_transform.basis, chain_item->transform->local_transform.origin);
 }
 
 void CMDDInverseKinematic::ChainTarget::align_to_axes(IKAxes inAxes) {
@@ -2130,15 +2130,15 @@ void CMDDInverseKinematic::ChainTarget::align_to_axes(IKAxes inAxes) {
 void CMDDInverseKinematic::ChainTarget::translate_global(Vector3 location) {
 	//TODO
 	//Remove
-	chain_item->local_transform.origin *= location;
+	chain_item->transform->local_transform.origin *= location;
 }
 
 void CMDDInverseKinematic::ChainTarget::translate(Vector3 location) {
-	chain_item->local_transform.origin *= location;
+	chain_item->transform->local_transform.origin *= location;
 }
 
 Vector3 CMDDInverseKinematic::ChainTarget::get_location() {
-	return chain_item->local_transform.origin;
+	return chain_item->transform->local_transform.origin;
 }
 
 Ref<CMDDInverseKinematic::ChainItem> CMDDInverseKinematic::ChainTarget::for_bone() {
